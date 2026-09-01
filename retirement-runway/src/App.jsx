@@ -122,7 +122,11 @@ function buildExplainLines(d, currency, lumpSumEvents) {
     } else {
       if (d.growthPct) lines.push(`Value grew ${d.growthPct}% on ${g(d.startBalance)} = +${g(d.growthAmount)}`);
       if (d.rentIncome) lines.push(`+${g(d.rentIncome)} rent collected (flows to cash)`);
-      if (d.mortgagePaymentAnnual) lines.push(`${g(d.principalPaid)} of mortgage paid off (${g(d.interestPaid)} was interest)`);
+      if (d.mortgageDefaulted) {
+        lines.push(`⚠️ Mortgage payment couldn't be covered this year — balance frozen, not reduced`);
+      } else if (d.mortgagePaymentAnnual) {
+        lines.push(`${g(d.principalPaid)} of mortgage paid off (${g(d.interestPaid)} was interest)`);
+      }
       if (d.withdrawn) lines.push(`−${g(d.withdrawn)} equity sold to cover a shortfall`);
     }
   } else if (d.kind === "retirement") {
@@ -216,6 +220,10 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
     const netPension = pensionGross * (1 - profile.taxBracket / 100);
 
     let extraIncome = 0;
+    let totalRentIncome = 0;
+    let totalDividendIncome = 0;
+    let totalMortgagePayments = 0;
+    const mortgagePaymentDetail = [];
     const houseIncomeDetail = {};
     invBal.forEach((inv) => {
       if (inv.type === "house") {
@@ -226,12 +234,19 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
         if (inv.usage === "rental") {
           rentIncome = (inv.currentRent || 0) * 12;
           extraIncome += rentIncome - annualPayment;
+          totalRentIncome += rentIncome;
         } else {
           extraIncome -= annualPayment;
         }
+        if (annualPayment > 0) {
+          totalMortgagePayments += annualPayment;
+          mortgagePaymentDetail.push({ name: inv.displayName, annual: annualPayment });
+        }
         houseIncomeDetail[inv.displayName] = { rentIncome, mortgagePaymentAnnual: annualPayment };
       } else if (inv.type === "dividend") {
-        extraIncome += inv.amount * ((inv.dividendYield || 0) / 100);
+        const divIncome = inv.amount * ((inv.dividendYield || 0) / 100);
+        extraIncome += divIncome;
+        totalDividendIncome += divIncome;
       }
     });
 
@@ -289,6 +304,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
     const netCashFlow = netSalary + netPension + extraIncome + lumpSumThisYear - annualExpenses;
 
     let cashWithdrawn = 0;
+    let defaultedThisYear = false;
 
     if (netCashFlow >= 0) {
       cashBal += netCashFlow;
@@ -406,6 +422,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
         }
       }
       if (shortfall > 0 && ranOutAge === null) ranOutAge = age;
+      if (shortfall > 0) defaultedThisYear = true;
     }
 
     explain["Cash"] = {
@@ -423,7 +440,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
       let nextBalance = inv.mortgageBalance || 0;
       let interestPaid = 0;
       let principalPaid = 0;
-      if (nextBalance > 0.01) {
+      if (nextBalance > 0.01 && !defaultedThisYear) {
         const rate = inv.mortgageRateType === "floating" ? cash.rate : inv.mortgageRate || 0;
         const annualInterest = nextBalance * (rate / 100);
         const annualPayment = (inv.mortgagePayment || 0) * 12;
@@ -438,6 +455,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
         explain[inv.displayName].mortgagePaymentAnnual = detail.mortgagePaymentAnnual || 0;
         explain[inv.displayName].interestPaid = interestPaid;
         explain[inv.displayName].principalPaid = principalPaid;
+        explain[inv.displayName].mortgageDefaulted = defaultedThisYear && nextBalance > 0.01 && (detail.mortgagePaymentAnnual || 0) > 0;
       }
       const nextRent = inv.usage === "rental" ? (inv.currentRent || 0) * (1 + expensesState.inflation / 100) : inv.currentRent;
       return { ...inv, mortgageBalance: nextBalance, currentRent: nextRent };
@@ -453,7 +471,22 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
       invBal.reduce((s, i) => s + Math.max(equityOf(i), 0), 0) +
       retBal.reduce((s, r) => s + Math.max(r.amount, 0), 0);
     record._explain = explain;
+    record._defaulted = defaultedThisYear;
     record._lumpSumEvents = lumpSumEvents;
+    if (netCashFlow < 0) {
+      record._shortfall = {
+        total: -netCashFlow,
+        livingExpenses: monthlyExpenses * 12,
+        postSaleRentExpense: extraRentExpenseAnnual,
+        mortgagePaymentDetail,
+        mortgagePayments: totalMortgagePayments,
+        salary: netSalary,
+        pension: netPension,
+        rentIncome: totalRentIncome,
+        dividendIncome: totalDividendIncome,
+        lumpSum: lumpSumThisYear,
+      };
+    }
     years.push(record);
 
     salary *= 1 + work.salaryGrowth / 100;
@@ -769,12 +802,27 @@ function getWizardSteps(a) {
   const steps = [
     { id: "currentAge", type: "number", question: "First up — how old are you today?", suffix: "years old" },
     { id: "multiCurrency", type: "yesno", question: "Do you hold money in more than one currency?" },
+    {
+      id: "customRates",
+      type: "yesno",
+      question: "Want to set your own growth, inflation, and tax rates — or use sensible defaults?",
+    },
     { id: "salary", type: "number", question: "What's your annual salary, before tax?", suffix: "$ / year" },
-    { id: "yearsWorking", type: "number", question: "How many more years do you plan to work?", suffix: "years" },
-    { id: "monthlyExpenses", type: "number", question: "What do you spend per month — not including any mortgage?", suffix: "$ / month" },
-    { id: "cash", type: "number", question: "How much cash do you have in the bank (not invested)?", suffix: "$" },
-    { id: "hasInvestments", type: "yesno", question: "Do you have any investments or trading accounts — stocks, index funds, ETFs?" },
   ];
+  if (a.customRates) {
+    steps.push({ id: "salaryGrowth", type: "number", question: "How much do you expect your salary to grow, per year?", suffix: "%/yr" });
+  }
+  steps.push({ id: "yearsWorking", type: "number", question: "How many more years do you plan to work?", suffix: "years" });
+  steps.push({ id: "monthlyExpenses", type: "number", question: "What do you spend per month — not including any mortgage?", suffix: "$ / month" });
+  if (a.customRates) {
+    steps.push({ id: "inflation", type: "number", question: "What inflation rate should we assume?", suffix: "%/yr" });
+    steps.push({ id: "taxBracket", type: "number", question: "What's your average tax rate — the share of income you actually pay overall?", suffix: "%" });
+  }
+  steps.push({ id: "cash", type: "number", question: "How much cash do you have in the bank (not invested)?", suffix: "$" });
+  if (a.customRates) {
+    steps.push({ id: "cashRate", type: "number", question: "What interest rate does your cash earn?", suffix: "%/yr" });
+  }
+  steps.push({ id: "hasInvestments", type: "yesno", question: "Do you have any investments or trading accounts — stocks, index funds, ETFs?" });
   if (a.hasInvestments) {
     steps.push({ id: "investmentsList", type: "investlist", question: "Tell us about your investments" });
   }
@@ -796,16 +844,44 @@ function getWizardSteps(a) {
 const WIZARD_DEFAULTS = {
   currentAge: 30,
   multiCurrency: null,
+  customRates: null,
   salary: 60000,
+  salaryGrowth: 2,
   yearsWorking: 30,
   monthlyExpenses: 3000,
+  inflation: 2.5,
+  taxBracket: 24,
   cash: 5000,
+  cashCurrency: "EUR",
+  cashRate: 2,
   hasInvestments: null,
-  investmentsList: [{ id: uid(), name: "Investments", amount: 10000, contribution: 300 }],
+  investmentsList: [{ id: uid(), name: "Investments", amount: 10000, contribution: 300, growthRate: 6, currency: "EUR" }],
   ownsHome: null,
-  housesList: [{ id: uid(), name: "Primary home", value: 300000, mortgageBalance: 150000, mortgagePayment: 1200 }],
+  housesList: [
+    {
+      id: uid(),
+      name: "Primary home",
+      usage: "primary",
+      value: 300000,
+      mortgageBalance: 150000,
+      mortgagePayment: 1200,
+      mortgageInputMode: "rate",
+      mortgageRate: 4.5,
+      mortgageYearsLeft: 20,
+      rent: 0,
+      growthRate: 3,
+      currency: "EUR",
+      sellable: false,
+      postSaleAction: "none",
+      rebuyValue: 0,
+      resizeFactor: 1,
+      postSaleRent: 0,
+    },
+  ],
   hasRetirementAccount: null,
-  retirementList: [{ id: uid(), name: "Retirement account", balance: 20000, contribution: 6000 }],
+  retirementList: [
+    { id: uid(), name: "Retirement account", balance: 20000, contribution: 6000, growthRate: 6, minAge: 60, taxTreatment: "pretax", currency: "EUR" },
+  ],
   hasPension: null,
   pensionStartAge: 67,
   pensionPercent: 40,
@@ -816,17 +892,17 @@ const defaultHouseId = uid();
 const defaultRetirementId = uid();
 
 const DEFAULTS = {
-  profile: { currentAge: 35, lifeExpectancy: 90, region: "US", currency: "USD", multiCurrency: false, taxBracket: 24 },
+  profile: { currentAge: 35, lifeExpectancy: 90, region: "EU", currency: "EUR", multiCurrency: false, taxBracket: 24 },
   work: { salary: 90000, yearsWorking: 30, salaryGrowth: 2 },
   expensesState: { monthly: 4000, inflation: 2.5 },
-  cash: { amount: 20000, rate: 2, currency: "USD" },
+  cash: { amount: 20000, rate: 2, currency: "EUR" },
   investments: [
     {
       id: defaultIndexFundId,
       name: "Index Fund",
       type: "market",
-      region: "US",
-      currency: "USD",
+      region: "EU",
+      currency: "EUR",
       amount: 100000,
       growthRate: 6,
       contribution: 500,
@@ -836,8 +912,8 @@ const DEFAULTS = {
       id: defaultHouseId,
       name: "Primary Home",
       type: "house",
-      region: "US",
-      currency: "USD",
+      region: "EU",
+      currency: "EUR",
       amount: 400000,
       growthRate: 3,
       usage: "primary",
@@ -855,12 +931,12 @@ const DEFAULTS = {
   retirement: [
     {
       id: defaultRetirementId,
-      name: "401(k)",
-      currency: "USD",
+      name: "Retirement account",
+      currency: "EUR",
       amount: 150000,
       growthRate: 6,
       contribution: 12000,
-      minAge: 59,
+      minAge: 60,
       taxTreatment: "pretax",
       earlyAccessAllowed: false,
       earlyPenalty: 10,
@@ -1059,14 +1135,18 @@ export default function RetirementCalculator() {
     setProfile({
       currentAge: a.currentAge,
       lifeExpectancy: 95,
-      region: "US",
-      currency: "USD",
+      region: "EU",
+      currency: "EUR",
       multiCurrency: !!a.multiCurrency,
-      taxBracket: 24,
+      taxBracket: a.customRates ? a.taxBracket ?? 24 : 24,
     });
-    setWork({ salary: a.salary, yearsWorking: a.yearsWorking, salaryGrowth: 2 });
-    setExpensesState({ monthly: a.monthlyExpenses, inflation: 2.5 });
-    setCash({ amount: a.cash, rate: 2 });
+    setWork({ salary: a.salary, yearsWorking: a.yearsWorking, salaryGrowth: a.customRates ? a.salaryGrowth ?? 2 : 2 });
+    setExpensesState({ monthly: a.monthlyExpenses, inflation: a.customRates ? a.inflation ?? 2.5 : 2.5 });
+    setCash({
+      amount: a.cash,
+      rate: a.customRates ? a.cashRate ?? 2 : 2,
+      currency: a.multiCurrency ? a.cashCurrency || "EUR" : "EUR",
+    });
 
     const newInvestments = [];
     const newOrder = ["cash"];
@@ -1077,9 +1157,10 @@ export default function RetirementCalculator() {
           id: item.id,
           name: item.name || "Investment",
           type: "market",
-          region: "US",
+          region: "EU",
+          currency: a.multiCurrency ? item.currency || "EUR" : "EUR",
           amount: item.amount || 0,
-          growthRate: 6,
+          growthRate: item.growthRate ?? 6,
           contribution: item.contribution || 0,
           contributionFrequency: "monthly",
         });
@@ -1087,27 +1168,33 @@ export default function RetirementCalculator() {
       });
     }
     if (a.ownsHome) {
-      a.housesList.forEach((item, idx) => {
-        const isPrimary = idx === 0;
+      a.housesList.forEach((item) => {
+        const isPrimary = (item.usage || "primary") !== "rental";
+        const sellable = item.sellable !== undefined ? item.sellable : !isPrimary;
         newInvestments.push({
           id: item.id,
           name: item.name || (isPrimary ? "Primary Home" : "Property"),
           type: "house",
-          region: "US",
+          region: "EU",
+          currency: a.multiCurrency ? item.currency || "EUR" : "EUR",
           amount: item.value || 0,
-          growthRate: 3,
+          growthRate: item.growthRate ?? 3,
           usage: isPrimary ? "primary" : "rental",
-          sellable: !isPrimary,
-          postSaleAction: "none",
+          sellable,
+          postSaleAction: sellable ? item.postSaleAction || "none" : "none",
+          rebuyValue: item.rebuyValue || 0,
+          resizeFactor: item.resizeFactor ?? 1,
+          postSaleRent: item.postSaleRent || 0,
           purchasePrice: Math.round((item.value || 0) * 0.7),
           mortgageBalance: item.mortgageBalance || 0,
           mortgagePayment: item.mortgagePayment || 0,
           mortgageRateType: "fixed",
-          mortgageInputMode: "rate",
-          mortgageRate: 4.5,
-          rent: 0,
+          mortgageInputMode: item.mortgageInputMode || "rate",
+          mortgageRate: item.mortgageRate ?? 4.5,
+          mortgageYearsLeft: item.mortgageYearsLeft || 20,
+          rent: isPrimary ? 0 : item.rent || 0,
         });
-        if (!isPrimary) newOrder.push(`house:${item.id}`);
+        if (sellable) newOrder.push(`house:${item.id}`);
       });
     }
     setInvestments(newInvestments);
@@ -1118,11 +1205,12 @@ export default function RetirementCalculator() {
         newRetirement.push({
           id: item.id,
           name: item.name || "Retirement account",
+          currency: a.multiCurrency ? item.currency || "EUR" : "EUR",
           amount: item.balance || 0,
-          growthRate: 6,
+          growthRate: item.growthRate ?? 6,
           contribution: item.contribution || 0,
-          minAge: 59,
-          taxTreatment: "pretax",
+          minAge: item.minAge ?? 60,
+          taxTreatment: item.taxTreatment || "pretax",
           earlyAccessAllowed: false,
           earlyPenalty: 10,
         });
@@ -1140,7 +1228,7 @@ export default function RetirementCalculator() {
     setTab("results");
   };
 
-  const currency = profile.currency || "USD";
+  const currency = profile.currency || "EUR";
 
   // convert every money bucket into the base currency for simulation & totals —
   // the raw state (native currency, as typed) stays untouched for editing
@@ -1683,11 +1771,30 @@ export default function RetirementCalculator() {
                     <Field label="Add per month">
                       <NumberInput accent="#4C8DFF" value={item.contribution} onChange={(v) => wizardUpdateItem("investmentsList", item.id, { contribution: v })} />
                     </Field>
+                    {wizardAnswers.customRates && (
+                      <Field label="Expected growth rate">
+                        <NumberInput
+                          accent="#4C8DFF"
+                          value={item.growthRate ?? 6}
+                          suffix="%/yr"
+                          onChange={(v) => wizardUpdateItem("investmentsList", item.id, { growthRate: v })}
+                        />
+                      </Field>
+                    )}
+                    {wizardAnswers.multiCurrency && (
+                      <Field label="Currency">
+                        <SelectInput
+                          value={item.currency || "EUR"}
+                          onChange={(v) => wizardUpdateItem("investmentsList", item.id, { currency: v })}
+                          options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                        />
+                      </Field>
+                    )}
                   </div>
                 </div>
               ))}
               <button
-                onClick={() => wizardAddItem("investmentsList", { name: "Investment", amount: 10000, contribution: 200 })}
+                onClick={() => wizardAddItem("investmentsList", { name: "Investment", amount: 10000, contribution: 200, growthRate: 6, currency: "EUR" })}
                 className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
                 style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
               >
@@ -1703,34 +1810,208 @@ export default function RetirementCalculator() {
             </div>
           ) : step.type === "houselist" ? (
             <div className="text-left">
-              {wizardAnswers.housesList.map((item, idx) => (
-                <div key={item.id} className="rounded-2xl bg-white p-3.5 mb-3 shadow-sm border border-stone-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-stone-400">{idx === 0 ? "Primary home" : `Property ${idx + 1}`}</span>
-                    {wizardAnswers.housesList.length > 1 && (
-                      <button onClick={() => wizardRemoveItem("housesList", item.id)} className="text-stone-300 hover:text-rose-500">
-                        <Trash2 size={14} />
-                      </button>
+              {wizardAnswers.housesList.map((item, idx) => {
+                const isRental = item.usage === "rental";
+                const mode = item.mortgageInputMode || "rate";
+                return (
+                  <div key={item.id} className="rounded-2xl bg-white p-3.5 mb-3 shadow-sm border border-stone-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-stone-400">Property {idx + 1}</span>
+                      {wizardAnswers.housesList.length > 1 && (
+                        <button onClick={() => wizardRemoveItem("housesList", item.id)} className="text-stone-300 hover:text-rose-500">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <Field label="Name">
+                      <TextInput value={item.name} onChange={(v) => wizardUpdateItem("housesList", item.id, { name: v })} />
+                    </Field>
+                    <Field label="This is my">
+                      <SelectInput
+                        value={item.usage || "primary"}
+                        onChange={(v) => wizardUpdateItem("housesList", item.id, { usage: v })}
+                        options={[
+                          { value: "primary", label: "Primary home" },
+                          { value: "rental", label: "Rental property" },
+                        ]}
+                      />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Value today">
+                        <NumberInput accent="#4C8DFF" value={item.value} onChange={(v) => wizardUpdateItem("housesList", item.id, { value: v })} />
+                      </Field>
+                      <Field label="Mortgage left (0 if none)">
+                        <NumberInput
+                          accent="#4C8DFF"
+                          value={item.mortgageBalance}
+                          onChange={(v) => wizardUpdateItem("housesList", item.id, { mortgageBalance: v })}
+                        />
+                      </Field>
+                    </div>
+                    {isRental && (
+                      <Field label="Monthly rent it earns">
+                        <NumberInput accent="#4C8DFF" value={item.rent || 0} onChange={(v) => wizardUpdateItem("housesList", item.id, { rent: v })} />
+                      </Field>
+                    )}
+                    <Field label="Monthly mortgage payment (0 if none)">
+                      <NumberInput
+                        accent="#4C8DFF"
+                        value={item.mortgagePayment}
+                        onChange={(v) => wizardUpdateItem("housesList", item.id, { mortgagePayment: v })}
+                      />
+                    </Field>
+                    {(item.mortgageBalance || 0) > 0 && (
+                      <>
+                        <Field label="I know:">
+                          <SelectInput
+                            value={mode}
+                            onChange={(v) => {
+                              if (v === "years") {
+                                const implied = solveMortgageYears(item.mortgageBalance || 0, item.mortgagePayment || 0, item.mortgageRate || 0);
+                                wizardUpdateItem("housesList", item.id, {
+                                  mortgageInputMode: v,
+                                  mortgageYearsLeft: isFinite(implied) ? Math.round(implied * 10) / 10 : item.mortgageYearsLeft || 20,
+                                });
+                              } else {
+                                wizardUpdateItem("housesList", item.id, { mortgageInputMode: v });
+                              }
+                            }}
+                            options={[
+                              { value: "rate", label: "Interest rate" },
+                              { value: "years", label: "Years remaining" },
+                            ]}
+                          />
+                        </Field>
+                        {mode === "rate" ? (
+                          <Field label="Interest rate">
+                            <NumberInput
+                              accent="#4C8DFF"
+                              value={item.mortgageRate ?? 4.5}
+                              suffix="%/yr"
+                              onChange={(v) => wizardUpdateItem("housesList", item.id, { mortgageRate: v })}
+                            />
+                          </Field>
+                        ) : (
+                          <Field label="Years remaining">
+                            <NumberInput
+                              accent="#4C8DFF"
+                              value={item.mortgageYearsLeft ?? 20}
+                              onChange={(v) => {
+                                const solved = solveMortgageRate(item.mortgageBalance || 0, item.mortgagePayment || 0, v);
+                                wizardUpdateItem("housesList", item.id, {
+                                  mortgageYearsLeft: v,
+                                  mortgageRate: solved != null ? solved : item.mortgageRate,
+                                });
+                              }}
+                            />
+                          </Field>
+                        )}
+                      </>
+                    )}
+                    <div className="grid grid-cols-2 gap-3">
+                      {wizardAnswers.customRates && (
+                        <Field label="Expected appreciation">
+                          <NumberInput
+                            accent="#4C8DFF"
+                            value={item.growthRate ?? 3}
+                            suffix="%/yr"
+                            onChange={(v) => wizardUpdateItem("housesList", item.id, { growthRate: v })}
+                          />
+                        </Field>
+                      )}
+                      {wizardAnswers.multiCurrency && (
+                        <Field label="Currency">
+                          <SelectInput
+                            value={item.currency || "EUR"}
+                            onChange={(v) => wizardUpdateItem("housesList", item.id, { currency: v })}
+                            options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                          />
+                        </Field>
+                      )}
+                    </div>
+                    <Field label="Could you sell this if you needed the money?">
+                      <SelectInput
+                        value={item.sellable === false ? "no" : "yes"}
+                        onChange={(v) => wizardUpdateItem("housesList", item.id, { sellable: v === "yes" })}
+                        options={[
+                          { value: "yes", label: "Yes — include it as a fallback" },
+                          { value: "no", label: "No — never sell (e.g. keep the family home)" },
+                        ]}
+                      />
+                    </Field>
+                    {item.sellable !== false && (
+                      <>
+                        <Field label="If it's sold, what happens?">
+                          <SelectInput
+                            value={item.postSaleAction || "none"}
+                            onChange={(v) => wizardUpdateItem("housesList", item.id, { postSaleAction: v })}
+                            options={[
+                              { value: "none", label: "Nothing — just take the cash" },
+                              { value: "rebuy", label: "Buy a new home for a set amount" },
+                              { value: "resize", label: "Buy something worth a multiple of the sale price" },
+                              { value: "rent", label: "Rent afterward" },
+                            ]}
+                          />
+                        </Field>
+                        {item.postSaleAction === "rebuy" && (
+                          <Field label="Value of the new home">
+                            <NumberInput
+                              accent="#4C8DFF"
+                              value={item.rebuyValue || 0}
+                              onChange={(v) => wizardUpdateItem("housesList", item.id, { rebuyValue: v })}
+                            />
+                          </Field>
+                        )}
+                        {item.postSaleAction === "resize" && (
+                          <Field label="Resize factor (0.5 = half, 2 = double)">
+                            <NumberInput
+                              accent="#4C8DFF"
+                              value={item.resizeFactor ?? 1}
+                              suffix="×"
+                              onChange={(v) => wizardUpdateItem("housesList", item.id, { resizeFactor: v })}
+                            />
+                          </Field>
+                        )}
+                        {item.postSaleAction === "rent" && (
+                          <Field label="Monthly rent after selling">
+                            <NumberInput
+                              accent="#4C8DFF"
+                              value={item.postSaleRent || 0}
+                              onChange={(v) => wizardUpdateItem("housesList", item.id, { postSaleRent: v })}
+                            />
+                          </Field>
+                        )}
+                        {(item.postSaleAction === "rebuy" || item.postSaleAction === "resize" || item.postSaleAction === "rent") && (
+                          <p className="text-xs text-stone-400 -mt-1">
+                            This only happens once your plan actually needs the money — not on a set date.
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
-                  <Field label="Name">
-                    <TextInput value={item.name} onChange={(v) => wizardUpdateItem("housesList", item.id, { name: v })} />
-                  </Field>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Value today">
-                      <NumberInput accent="#4C8DFF" value={item.value} onChange={(v) => wizardUpdateItem("housesList", item.id, { value: v })} />
-                    </Field>
-                    <Field label="Mortgage left (0 if none)">
-                      <NumberInput accent="#4C8DFF" value={item.mortgageBalance} onChange={(v) => wizardUpdateItem("housesList", item.id, { mortgageBalance: v })} />
-                    </Field>
-                  </div>
-                  <Field label="Monthly mortgage payment (0 if none)">
-                    <NumberInput accent="#4C8DFF" value={item.mortgagePayment} onChange={(v) => wizardUpdateItem("housesList", item.id, { mortgagePayment: v })} />
-                  </Field>
-                </div>
-              ))}
+                );
+              })}
               <button
-                onClick={() => wizardAddItem("housesList", { name: "Rental property", value: 250000, mortgageBalance: 100000, mortgagePayment: 900 })}
+                onClick={() =>
+                  wizardAddItem("housesList", {
+                    name: "Rental property",
+                    usage: "rental",
+                    value: 250000,
+                    mortgageBalance: 100000,
+                    mortgagePayment: 900,
+                    mortgageInputMode: "rate",
+                    mortgageRate: 4.5,
+                    mortgageYearsLeft: 20,
+                    rent: 1200,
+                    growthRate: 3,
+                    currency: "EUR",
+                    sellable: true,
+                    postSaleAction: "none",
+                    rebuyValue: 0,
+                    resizeFactor: 1,
+                    postSaleRent: 0,
+                  })
+                }
                 className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
                 style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
               >
@@ -1766,11 +2047,57 @@ export default function RetirementCalculator() {
                     <Field label="Added per year">
                       <NumberInput accent="#4C8DFF" value={item.contribution} onChange={(v) => wizardUpdateItem("retirementList", item.id, { contribution: v })} />
                     </Field>
+                    {wizardAnswers.customRates && (
+                      <Field label="Expected growth rate">
+                        <NumberInput
+                          accent="#4C8DFF"
+                          value={item.growthRate ?? 6}
+                          suffix="%/yr"
+                          onChange={(v) => wizardUpdateItem("retirementList", item.id, { growthRate: v })}
+                        />
+                      </Field>
+                    )}
+                    <Field label="Minimum withdrawal age">
+                      <NumberInput
+                        accent="#4C8DFF"
+                        value={item.minAge ?? 60}
+                        onChange={(v) => wizardUpdateItem("retirementList", item.id, { minAge: v })}
+                      />
+                    </Field>
+                    {wizardAnswers.multiCurrency && (
+                      <Field label="Currency">
+                        <SelectInput
+                          value={item.currency || "EUR"}
+                          onChange={(v) => wizardUpdateItem("retirementList", item.id, { currency: v })}
+                          options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                        />
+                      </Field>
+                    )}
                   </div>
+                  <Field label="Tax treatment">
+                    <SelectInput
+                      value={item.taxTreatment || "pretax"}
+                      onChange={(v) => wizardUpdateItem("retirementList", item.id, { taxTreatment: v })}
+                      options={[
+                        { value: "pretax", label: "Taxed when withdrawn" },
+                        { value: "posttax", label: "Already taxed — tax-free withdrawal" },
+                      ]}
+                    />
+                  </Field>
                 </div>
               ))}
               <button
-                onClick={() => wizardAddItem("retirementList", { name: "Retirement account", balance: 10000, contribution: 4000 })}
+                onClick={() =>
+                  wizardAddItem("retirementList", {
+                    name: "Retirement account",
+                    balance: 10000,
+                    contribution: 4000,
+                    growthRate: 6,
+                    minAge: 60,
+                    taxTreatment: "pretax",
+                    currency: "EUR",
+                  })
+                }
                 className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
                 style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
               >
@@ -1818,6 +2145,17 @@ export default function RetirementCalculator() {
                 suffix={step.suffix}
                 onChange={(v) => setWizardAnswers((a) => ({ ...a, [step.id]: v }))}
               />
+              {step.id === "cash" && wizardAnswers.multiCurrency && (
+                <div className="mt-3">
+                  <Field label="Currency">
+                    <SelectInput
+                      value={wizardAnswers.cashCurrency || "EUR"}
+                      onChange={(v) => setWizardAnswers((a) => ({ ...a, cashCurrency: v }))}
+                      options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                    />
+                  </Field>
+                </div>
+              )}
               <button
                 onClick={goNext}
                 className="w-full mt-6 rounded-full py-3.5 font-semibold text-white"
@@ -2237,7 +2575,7 @@ export default function RetirementCalculator() {
                 </Field>
                 <Field label="Main currency (results are shown in this)">
                   <SelectInput
-                    value={profile.currency || "USD"}
+                    value={profile.currency || "EUR"}
                     onChange={(v) => setProfile({ ...profile, currency: v })}
                     options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
                   />
@@ -3024,6 +3362,75 @@ export default function RetirementCalculator() {
                   Close ✕
                 </button>
               </div>
+              {selectedRecord._defaulted && (
+                <div className="rounded-xl px-3 py-2.5 text-xs font-medium mb-3" style={{ background: "#FFF1EC", color: "#B23A22" }}>
+                  ⚠️ This year's expenses (and any mortgage payments) couldn't be fully covered by any bucket in
+                  your withdrawal order — nothing was invented to make up the difference; any mortgage below is
+                  frozen rather than paid down.
+                </div>
+              )}
+              {selectedRecord._shortfall && (
+                <div className="rounded-xl p-3 mb-3" style={{ background: "#F7F5FB" }}>
+                  <div className="text-xs font-semibold text-stone-600 mb-1.5">
+                    Why {fmt(selectedRecord._shortfall.total, currency)} was needed this year
+                  </div>
+                  <div className="text-[11px] text-stone-500 space-y-0.5">
+                    <div className="flex justify-between">
+                      <span>Living expenses</span>
+                      <span>{fmt(selectedRecord._shortfall.livingExpenses, currency)}</span>
+                    </div>
+                    {selectedRecord._shortfall.mortgagePaymentDetail.map((m) => (
+                      <div key={m.name} className="flex justify-between">
+                        <span>Mortgage — {m.name}</span>
+                        <span>{fmt(m.annual, currency)}</span>
+                      </div>
+                    ))}
+                    {selectedRecord._shortfall.postSaleRentExpense > 0 && (
+                      <div className="flex justify-between">
+                        <span>Rent (after selling)</span>
+                        <span>{fmt(selectedRecord._shortfall.postSaleRentExpense, currency)}</span>
+                      </div>
+                    )}
+                    {selectedRecord._shortfall.salary > 0 && (
+                      <div className="flex justify-between">
+                        <span>− Salary received</span>
+                        <span>−{fmt(selectedRecord._shortfall.salary, currency)}</span>
+                      </div>
+                    )}
+                    {selectedRecord._shortfall.pension > 0 && (
+                      <div className="flex justify-between">
+                        <span>− Pension received</span>
+                        <span>−{fmt(selectedRecord._shortfall.pension, currency)}</span>
+                      </div>
+                    )}
+                    {selectedRecord._shortfall.rentIncome > 0 && (
+                      <div className="flex justify-between">
+                        <span>− Rent received</span>
+                        <span>−{fmt(selectedRecord._shortfall.rentIncome, currency)}</span>
+                      </div>
+                    )}
+                    {selectedRecord._shortfall.dividendIncome > 0 && (
+                      <div className="flex justify-between">
+                        <span>− Dividends received</span>
+                        <span>−{fmt(selectedRecord._shortfall.dividendIncome, currency)}</span>
+                      </div>
+                    )}
+                    {selectedRecord._shortfall.lumpSum !== 0 && (
+                      <div className="flex justify-between">
+                        <span>{selectedRecord._shortfall.lumpSum > 0 ? "− Lump sum received" : "+ Lump sum paid out"}</span>
+                        <span>
+                          {selectedRecord._shortfall.lumpSum > 0 ? "−" : "+"}
+                          {fmt(Math.abs(selectedRecord._shortfall.lumpSum), currency)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-semibold pt-1.5 mt-1 border-t border-stone-200 text-stone-700">
+                      <span>= Shortfall to cover</span>
+                      <span>{fmt(selectedRecord._shortfall.total, currency)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
               {seriesKeys.map((key, idx) => {
                 const color = PALETTE[idx % PALETTE.length];
                 const before = prevRecord ? prevRecord[key] || 0 : 0;
@@ -3115,7 +3522,10 @@ export default function RetirementCalculator() {
             marginal brackets. Lump sums hit as a single cash event in the year they occur, untaxed and not
             inflation-adjusted. Any bucket set to a different currency than your base currency (Profile tab) is
             converted using live exchange rates when available, or an approximate offline table if not — check
-            the Profile tab to see which is active. Growth is applied once per year, before that year's
+            the Profile tab to see which is active. In any year where expenses (and any mortgage payments) can't
+            be fully covered by anything in your withdrawal order, nothing is invented to make up the gap — that
+            year's mortgages are frozen rather than paid down, since the payment wasn't actually made; the
+            year-by-year breakdown flags this explicitly. Growth is applied once per year, before that year's
             withdrawals.
           </div>
         </div>
