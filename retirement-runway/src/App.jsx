@@ -4,12 +4,23 @@ import {
   ResponsiveContainer, ReferenceLine
 } from "recharts";
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, Home, TrendingUp, Wallet, PiggyBank, User, Save, FolderOpen, Sparkles, Rocket, Timer, GitCompare
+  Plus, Trash2, ChevronUp, ChevronDown, Home, TrendingUp, Wallet, PiggyBank, User, Save, FolderOpen, Sparkles, Rocket, Timer, GitCompare, Info, X
 } from "lucide-react";
 
 // ---------- helpers ----------
 const uid = () => Math.random().toString(36).slice(2, 9);
 const REGION_CURRENCY = { US: "USD", EU: "EUR", UK: "GBP", Canada: "CAD", Other: "USD" };
+const SUPPORTED_CURRENCIES = ["USD", "EUR", "GBP", "CAD"];
+// approximate, offline fallback — value of 1 unit of each currency in USD.
+// Used only if the live rate fetch fails; replaced by real rates when it succeeds.
+const FX_FALLBACK = { USD: 1, EUR: 1.08, GBP: 1.27, CAD: 0.73 };
+// converts an amount from `fromCcy` into `toCcy` using a table of "USD per 1 unit" rates
+function convertCurrency(amount, fromCcy, toCcy, rates) {
+  if (!amount || !fromCcy || !toCcy || fromCcy === toCcy) return amount || 0;
+  const from = rates[fromCcy] ?? FX_FALLBACK[fromCcy] ?? 1;
+  const to = rates[toCcy] ?? FX_FALLBACK[toCcy] ?? 1;
+  return (amount * from) / to;
+}
 const fmt = (n, currency = "USD") =>
   new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(Math.round(n || 0));
 const fmtShort = (n) => {
@@ -103,6 +114,11 @@ function buildExplainLines(d, currency, lumpSumEvents) {
       } else if (d.postSaleAction === "rent") {
         lines.push(`Now renting at ${g(d.newMonthlyRent)}/month (grows with inflation)`);
       }
+      if (d.reinvestedAs === "cd" || d.reinvestedAs === "market") {
+        lines.push(
+          `${g(d.reinvestedAmount)} put into a ${d.reinvestedAs === "cd" ? "CD" : "market fund"} at ${d.reinvestRate}%/yr`
+        );
+      }
     } else {
       if (d.growthPct) lines.push(`Value grew ${d.growthPct}% on ${g(d.startBalance)} = +${g(d.growthAmount)}`);
       if (d.rentIncome) lines.push(`+${g(d.rentIncome)} rent collected (flows to cash)`);
@@ -154,8 +170,8 @@ const SECTIONS = [
   { id: "lumpsums", label: "Lump sums", icon: <Sparkles size={14} /> },
 ];
 
-const SESSION_KEY = "retirement-calc-session-v7";
-const PROFILE_KEY = "retirement-calc-profile-v7";
+const SESSION_KEY = "retirement-calc-session-v8";
+const PROFILE_KEY = "retirement-calc-profile-v8";
 
 function withDisplayNames(list, fallbackPrefix) {
   const seen = {};
@@ -310,8 +326,18 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
           if (explain[r.displayName]) explain[r.displayName].withdrawn += take;
           shortfall -= net;
         } else if (type === "house") {
-          const inv = invBal.find((i) => i.id === id && i.type === "house");
-          if (!inv || inv.sellable === false || inv._sold) continue;
+          const rawInv = invBal.find((i) => i.id === id);
+          if (!rawInv || rawInv.sellable === false) continue;
+          if (rawInv._sold && rawInv.type !== "house") {
+            // already sold and reinvested in a prior year — now behaves like a normal investment
+            const take = Math.min(rawInv.amount, shortfall);
+            rawInv.amount -= take;
+            if (explain[rawInv.displayName]) explain[rawInv.displayName].withdrawn += take;
+            shortfall -= take;
+            continue;
+          }
+          const inv = rawInv.type === "house" ? rawInv : null;
+          if (!inv || inv._sold) continue;
           const equity = Math.max(0, inv.amount - (inv.mortgageBalance || 0));
           if (equity <= 0) continue;
           const gainFraction =
@@ -333,16 +359,34 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
               inv.purchasePrice = newValue;
               inv.sellable = false;
               saleNote = { newHomeValue: newValue };
-            } else if (inv.postSaleAction === "rent") {
-              inv.amount = 0;
-              inv.mortgageBalance = 0;
-              extraRentExpenseAnnual = (inv.postSaleRent || 0) * 12;
-              saleNote = { newMonthlyRent: inv.postSaleRent || 0 };
+              inv._sold = true;
+              const applied = Math.min(Math.max(cashFromSale, 0), shortfall);
+              shortfall -= applied;
+              cashBal += cashFromSale - applied;
+            } else {
+              // "rent" (or no housing plan): decide what happens to the proceeds not needed this year
+              if (inv.postSaleAction === "rent") {
+                extraRentExpenseAnnual = (inv.postSaleRent || 0) * 12;
+                saleNote = { newMonthlyRent: inv.postSaleRent || 0 };
+              }
+              inv._sold = true;
+              const applied = Math.min(Math.max(cashFromSale, 0), shortfall);
+              shortfall -= applied;
+              const leftover = cashFromSale - applied;
+              if ((inv.reinvestAs === "cd" || inv.reinvestAs === "market") && leftover > 0) {
+                inv.amount = leftover;
+                inv.type = "market";
+                inv.growthRate = inv.reinvestRate || 0;
+                inv.mortgageBalance = 0;
+                saleNote.reinvestedAs = inv.reinvestAs;
+                saleNote.reinvestedAmount = leftover;
+                saleNote.reinvestRate = inv.reinvestRate || 0;
+              } else {
+                inv.amount = 0;
+                inv.mortgageBalance = 0;
+                cashBal += leftover;
+              }
             }
-            inv._sold = true;
-            const applied = Math.min(Math.max(cashFromSale, 0), shortfall);
-            shortfall -= applied;
-            cashBal += cashFromSale - applied;
             if (explain[inv.displayName]) {
               explain[inv.displayName].sold = true;
               explain[inv.displayName].saleValue = saleValue;
@@ -561,29 +605,35 @@ function Field({ label, children }) {
 const inputCls =
   "w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-offset-0 transition-shadow";
 
+function parseLocaleNumber(str) {
+  return parseFloat(String(str).trim().replace(",", "."));
+}
+
 function NumberInput({ value, onChange, suffix, accent = "#4C8DFF" }) {
   const [draft, setDraft] = useState(String(value ?? 0));
 
   useEffect(() => {
-    if (parseFloat(draft) !== value) setDraft(String(value ?? 0));
+    if (parseLocaleNumber(draft) !== value) setDraft(String(value ?? 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   const handleChange = (e) => {
     const v = e.target.value;
-    if (v === "" || /^-?\d*\.?\d*$/.test(v)) {
+    // accept both "." and "," as the decimal separator — iPhones set to a
+    // European region only offer a comma on the numeric keyboard
+    if (v === "" || /^-?\d*[.,]?\d*$/.test(v)) {
       setDraft(v);
-      const num = parseFloat(v);
+      const num = parseLocaleNumber(v);
       if (!isNaN(num)) onChange(num);
     }
   };
 
   const handleBlur = () => {
-    if (draft === "" || draft === "-" || isNaN(parseFloat(draft))) {
+    const num = parseLocaleNumber(draft);
+    if (draft === "" || draft === "-" || isNaN(num)) {
       setDraft("0");
       onChange(0);
     } else {
-      const num = parseFloat(draft);
       setDraft(String(num));
       onChange(num);
     }
@@ -640,6 +690,28 @@ function SummaryStat({ label, value, color }) {
     </div>
   );
 }
+function StackedChartTooltip({ active, payload, label, currency }) {
+  if (!active || !payload || !payload.length) return null;
+  const total = payload.reduce((s, p) => s + (p.value || 0), 0);
+  return (
+    <div className="rounded-lg bg-white shadow-lg border border-stone-100 px-3 py-2 text-xs min-w-[160px]">
+      <div className="font-semibold text-stone-500 mb-1.5">Age {label}</div>
+      {payload.map((p) => (
+        <div key={p.dataKey} className="flex items-center justify-between gap-4 py-0.5">
+          <span className="flex items-center gap-1.5 text-stone-600">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
+            {p.name}
+          </span>
+          <span className="font-medium">{fmt(p.value, currency)}</span>
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-stone-100 font-semibold">
+        <span>Total</span>
+        <span>{fmt(total, currency)}</span>
+      </div>
+    </div>
+  );
+}
 function ClockBlock({ value, label }) {
   return (
     <div className="flex flex-col items-center">
@@ -653,21 +725,108 @@ function ClockBlock({ value, label }) {
   );
 }
 
+function WizardInput({ value, onChange, suffix }) {
+  const [draft, setDraft] = useState(String(value ?? 0));
+  useEffect(() => {
+    if (parseLocaleNumber(draft) !== value) setDraft(String(value ?? 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return (
+    <div>
+      <input
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        className="w-full text-center text-3xl font-bold rounded-2xl border-2 border-stone-200 focus:border-[#4C8DFF] focus:outline-none px-4 py-5"
+        style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+        value={draft}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "" || /^-?\d*[.,]?\d*$/.test(v)) {
+            setDraft(v);
+            const n = parseLocaleNumber(v);
+            if (!isNaN(n)) onChange(n);
+          }
+        }}
+        onBlur={() => {
+          const n = parseLocaleNumber(draft);
+          if (draft === "" || isNaN(n)) {
+            setDraft("0");
+            onChange(0);
+          } else {
+            setDraft(String(n));
+          }
+        }}
+        onFocus={(e) => e.target.select()}
+      />
+      {suffix && <div className="text-center text-xs text-stone-400 mt-2">{suffix}</div>}
+    </div>
+  );
+}
+
+// ---------- onboarding wizard: question list, branching on yes/no answers ----------
+function getWizardSteps(a) {
+  const steps = [
+    { id: "currentAge", type: "number", question: "First up — how old are you today?", suffix: "years old" },
+    { id: "multiCurrency", type: "yesno", question: "Do you hold money in more than one currency?" },
+    { id: "salary", type: "number", question: "What's your annual salary, before tax?", suffix: "$ / year" },
+    { id: "yearsWorking", type: "number", question: "How many more years do you plan to work?", suffix: "years" },
+    { id: "monthlyExpenses", type: "number", question: "What do you spend per month — not including any mortgage?", suffix: "$ / month" },
+    { id: "cash", type: "number", question: "How much cash do you have in the bank (not invested)?", suffix: "$" },
+    { id: "hasInvestments", type: "yesno", question: "Do you have any investments or trading accounts — stocks, index funds, ETFs?" },
+  ];
+  if (a.hasInvestments) {
+    steps.push({ id: "investmentsList", type: "investlist", question: "Tell us about your investments" });
+  }
+  steps.push({ id: "ownsHome", type: "yesno", question: "Do you own any property — your home, or a rental?" });
+  if (a.ownsHome) {
+    steps.push({ id: "housesList", type: "houselist", question: "Tell us about your property" });
+  }
+  steps.push({ id: "hasRetirementAccount", type: "yesno", question: "Do you have a retirement account — 401(k), IRA, or similar?" });
+  if (a.hasRetirementAccount) {
+    steps.push({ id: "retirementList", type: "retirelist", question: "Tell us about your retirement accounts" });
+  }
+  steps.push({ id: "hasPension", type: "yesno", question: "Will you get a state or employer pension?" });
+  if (a.hasPension) {
+    steps.push({ id: "pensionDetails", type: "pension", question: "Tell us about your pension" });
+  }
+  return steps;
+}
+
+const WIZARD_DEFAULTS = {
+  currentAge: 30,
+  multiCurrency: null,
+  salary: 60000,
+  yearsWorking: 30,
+  monthlyExpenses: 3000,
+  cash: 5000,
+  hasInvestments: null,
+  investmentsList: [{ id: uid(), name: "Investments", amount: 10000, contribution: 300 }],
+  ownsHome: null,
+  housesList: [{ id: uid(), name: "Primary home", value: 300000, mortgageBalance: 150000, mortgagePayment: 1200 }],
+  hasRetirementAccount: null,
+  retirementList: [{ id: uid(), name: "Retirement account", balance: 20000, contribution: 6000 }],
+  hasPension: null,
+  pensionStartAge: 67,
+  pensionPercent: 40,
+};
+
 const defaultIndexFundId = uid();
 const defaultHouseId = uid();
 const defaultRetirementId = uid();
 
 const DEFAULTS = {
-  profile: { currentAge: 35, lifeExpectancy: 90, region: "US", taxBracket: 24 },
+  profile: { currentAge: 35, lifeExpectancy: 90, region: "US", currency: "USD", multiCurrency: false, taxBracket: 24 },
   work: { salary: 90000, yearsWorking: 30, salaryGrowth: 2 },
   expensesState: { monthly: 4000, inflation: 2.5 },
-  cash: { amount: 20000, rate: 2 },
+  cash: { amount: 20000, rate: 2, currency: "USD" },
   investments: [
     {
       id: defaultIndexFundId,
       name: "Index Fund",
       type: "market",
       region: "US",
+      currency: "USD",
       amount: 100000,
       growthRate: 6,
       contribution: 500,
@@ -678,6 +837,7 @@ const DEFAULTS = {
       name: "Primary Home",
       type: "house",
       region: "US",
+      currency: "USD",
       amount: 400000,
       growthRate: 3,
       usage: "primary",
@@ -696,6 +856,7 @@ const DEFAULTS = {
     {
       id: defaultRetirementId,
       name: "401(k)",
+      currency: "USD",
       amount: 150000,
       growthRate: 6,
       contribution: 12000,
@@ -720,6 +881,10 @@ export default function RetirementCalculator() {
   const [loaded, setLoaded] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
   const [showChoice, setShowChoice] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStarted, setOnboardingStarted] = useState(false);
+  const [wizardStepIndex, setWizardStepIndex] = useState(0);
+  const [wizardAnswers, setWizardAnswers] = useState(WIZARD_DEFAULTS);
   const [toast, setToast] = useState("");
   const [gamifiedToast, setGamifiedToast] = useState(null);
 
@@ -735,6 +900,32 @@ export default function RetirementCalculator() {
   const [whatIfChanges, setWhatIfChanges] = useState([]);
   const [selectedAge, setSelectedAge] = useState(null);
   const [showNetWorthBreakdown, setShowNetWorthBreakdown] = useState(false);
+  const [showMethodology, setShowMethodology] = useState(false);
+  const [fxRates, setFxRates] = useState(FX_FALLBACK);
+  const [fxSource, setFxSource] = useState("fallback"); // "live" | "fallback" | "loading"
+
+  const fetchFxRates = () => {
+    setFxSource("loading");
+    fetch(`https://api.frankfurter.app/latest?from=USD&to=${SUPPORTED_CURRENCIES.filter((c) => c !== "USD").join(",")}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("bad response");
+        return res.json();
+      })
+      .then((data) => {
+        // frankfurter returns "units of X per 1 USD" — invert to "USD per 1 unit of X"
+        const next = { USD: 1 };
+        Object.entries(data.rates || {}).forEach(([ccy, perUsd]) => {
+          if (perUsd) next[ccy] = 1 / perUsd;
+        });
+        setFxRates((prev) => ({ ...prev, ...next }));
+        setFxSource("live");
+      })
+      .catch(() => setFxSource("fallback"));
+  };
+  useEffect(() => {
+    fetchFxRates();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const applyAll = (data) => {
     if (!data) return;
@@ -787,6 +978,7 @@ export default function RetirementCalculator() {
         setShowChoice(true);
         setLoaded(true);
       } else {
+        setShowOnboarding(true);
         setLoaded(true);
       }
     })();
@@ -804,14 +996,14 @@ export default function RetirementCalculator() {
 
   const saveTimer = useRef(null);
   useEffect(() => {
-    if (!loaded || showChoice) return;
+    if (!loaded || showChoice || showOnboarding) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       window.storage.set(SESSION_KEY, JSON.stringify(collectAll()), false).catch(() => {});
     }, 400);
     return () => clearTimeout(saveTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension, lumpSums, loaded, showChoice]);
+  }, [profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension, lumpSums, loaded, showChoice, showOnboarding]);
 
   const chooseLoadProfile = async () => {
     try {
@@ -820,9 +1012,16 @@ export default function RetirementCalculator() {
     } catch (e) {}
     setShowChoice(false);
   };
-  const chooseFresh = () => {
+  const relaunchOnboarding = () => {
     applyAll(freshDefaults());
+    setWizardAnswers(WIZARD_DEFAULTS);
+    setWizardStepIndex(0);
+    setOnboardingStarted(false);
+    setShowOnboarding(true);
+  };
+  const chooseFresh = () => {
     setShowChoice(false);
+    relaunchOnboarding();
   };
 
   const saveAsProfile = async () => {
@@ -846,20 +1045,168 @@ export default function RetirementCalculator() {
     }
   };
   const startFresh = () => {
-    applyAll(freshDefaults());
-    showToast("Started fresh — your saved profile is untouched");
+    relaunchOnboarding();
   };
 
-  const currency = REGION_CURRENCY[profile.region] || "USD";
+  const wizardAddItem = (listKey, template) =>
+    setWizardAnswers((a) => ({ ...a, [listKey]: [...a[listKey], { id: uid(), ...template }] }));
+  const wizardUpdateItem = (listKey, id, patch) =>
+    setWizardAnswers((a) => ({ ...a, [listKey]: a[listKey].map((it) => (it.id === id ? { ...it, ...patch } : it)) }));
+  const wizardRemoveItem = (listKey, id) =>
+    setWizardAnswers((a) => ({ ...a, [listKey]: a[listKey].filter((it) => it.id !== id) }));
+
+  const finishOnboarding = (a) => {
+    setProfile({
+      currentAge: a.currentAge,
+      lifeExpectancy: 95,
+      region: "US",
+      currency: "USD",
+      multiCurrency: !!a.multiCurrency,
+      taxBracket: 24,
+    });
+    setWork({ salary: a.salary, yearsWorking: a.yearsWorking, salaryGrowth: 2 });
+    setExpensesState({ monthly: a.monthlyExpenses, inflation: 2.5 });
+    setCash({ amount: a.cash, rate: 2 });
+
+    const newInvestments = [];
+    const newOrder = ["cash"];
+
+    if (a.hasInvestments) {
+      a.investmentsList.forEach((item) => {
+        newInvestments.push({
+          id: item.id,
+          name: item.name || "Investment",
+          type: "market",
+          region: "US",
+          amount: item.amount || 0,
+          growthRate: 6,
+          contribution: item.contribution || 0,
+          contributionFrequency: "monthly",
+        });
+        newOrder.push(`investment:${item.id}`);
+      });
+    }
+    if (a.ownsHome) {
+      a.housesList.forEach((item, idx) => {
+        const isPrimary = idx === 0;
+        newInvestments.push({
+          id: item.id,
+          name: item.name || (isPrimary ? "Primary Home" : "Property"),
+          type: "house",
+          region: "US",
+          amount: item.value || 0,
+          growthRate: 3,
+          usage: isPrimary ? "primary" : "rental",
+          sellable: !isPrimary,
+          postSaleAction: "none",
+          purchasePrice: Math.round((item.value || 0) * 0.7),
+          mortgageBalance: item.mortgageBalance || 0,
+          mortgagePayment: item.mortgagePayment || 0,
+          mortgageRateType: "fixed",
+          mortgageInputMode: "rate",
+          mortgageRate: 4.5,
+          rent: 0,
+        });
+        if (!isPrimary) newOrder.push(`house:${item.id}`);
+      });
+    }
+    setInvestments(newInvestments);
+
+    const newRetirement = [];
+    if (a.hasRetirementAccount) {
+      a.retirementList.forEach((item) => {
+        newRetirement.push({
+          id: item.id,
+          name: item.name || "Retirement account",
+          amount: item.balance || 0,
+          growthRate: 6,
+          contribution: item.contribution || 0,
+          minAge: 59,
+          taxTreatment: "pretax",
+          earlyAccessAllowed: false,
+          earlyPenalty: 10,
+        });
+        newOrder.push(`retirement:${item.id}`);
+      });
+    }
+    setRetirement(newRetirement);
+
+    setPension({ enabled: !!a.hasPension, startAge: a.pensionStartAge, percentOfSalary: a.pensionPercent });
+    setWithdrawalOrder(newOrder);
+    setLumpSums([]);
+
+    setShowOnboarding(false);
+    setOnboardingStarted(false);
+    setTab("results");
+  };
+
+  const currency = profile.currency || "USD";
+
+  // convert every money bucket into the base currency for simulation & totals —
+  // the raw state (native currency, as typed) stays untouched for editing
+  const convertedCash = useMemo(
+    () => ({ ...cash, amount: convertCurrency(cash.amount, cash.currency || currency, currency, fxRates) }),
+    [cash, currency, fxRates]
+  );
+  const convertedInvestments = useMemo(
+    () =>
+      investments.map((inv) => {
+        const c = inv.currency || currency;
+        if (c === currency) return inv;
+        return {
+          ...inv,
+          amount: convertCurrency(inv.amount, c, currency, fxRates),
+          contribution: convertCurrency(inv.contribution, c, currency, fxRates),
+          mortgageBalance: convertCurrency(inv.mortgageBalance, c, currency, fxRates),
+          mortgagePayment: convertCurrency(inv.mortgagePayment, c, currency, fxRates),
+          purchasePrice: convertCurrency(inv.purchasePrice, c, currency, fxRates),
+          rent: convertCurrency(inv.rent, c, currency, fxRates),
+          rebuyValue: convertCurrency(inv.rebuyValue, c, currency, fxRates),
+          postSaleRent: convertCurrency(inv.postSaleRent, c, currency, fxRates),
+        };
+      }),
+    [investments, currency, fxRates]
+  );
+  const convertedRetirement = useMemo(
+    () =>
+      retirement.map((r) => {
+        const c = r.currency || currency;
+        if (c === currency) return r;
+        return { ...r, amount: convertCurrency(r.amount, c, currency, fxRates), contribution: convertCurrency(r.contribution, c, currency, fxRates) };
+      }),
+    [retirement, currency, fxRates]
+  );
 
   const { years, ranOutAge } = useMemo(
-    () => runSimulation({ profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension, lumpSums }),
-    [profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension, lumpSums]
+    () =>
+      runSimulation({
+        profile,
+        work,
+        expensesState,
+        cash: convertedCash,
+        investments: convertedInvestments,
+        retirement: convertedRetirement,
+        withdrawalOrder,
+        pension,
+        lumpSums,
+      }),
+    [profile, work, expensesState, convertedCash, convertedInvestments, convertedRetirement, withdrawalOrder, pension, lumpSums]
   );
 
   const { fiAge } = useMemo(
-    () => computeFI({ profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension, lumpSums }),
-    [profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension, lumpSums]
+    () =>
+      computeFI({
+        profile,
+        work,
+        expensesState,
+        cash: convertedCash,
+        investments: convertedInvestments,
+        retirement: convertedRetirement,
+        withdrawalOrder,
+        pension,
+        lumpSums,
+      }),
+    [profile, work, expensesState, convertedCash, convertedInvestments, convertedRetirement, withdrawalOrder, pension, lumpSums]
   );
 
   const yearsToFI = fiAge != null ? fiAge - profile.currentAge : null;
@@ -885,7 +1232,17 @@ export default function RetirementCalculator() {
   }
 
   const whatIfInputs = useMemo(() => {
-    let draft = { profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension, lumpSums };
+    let draft = {
+      profile,
+      work,
+      expensesState,
+      cash: convertedCash,
+      investments: convertedInvestments,
+      retirement: convertedRetirement,
+      withdrawalOrder,
+      pension,
+      lumpSums,
+    };
     whatIfChanges.forEach((change) => {
       if (change.leverId === "lumpsum") {
         const signedAmount = (change.amountType === "pay" ? -1 : 1) * Math.abs(change.amountMagnitude || 0);
@@ -902,7 +1259,7 @@ export default function RetirementCalculator() {
       if (lever) draft = lever.apply(draft, change.value ?? lever.getCurrent(draft));
     });
     return draft;
-  }, [profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension, lumpSums, whatIfChanges]);
+  }, [profile, work, expensesState, convertedCash, convertedInvestments, convertedRetirement, withdrawalOrder, pension, lumpSums, whatIfChanges]);
 
   const { fiAge: altFiAge } = useMemo(() => computeFI(whatIfInputs), [whatIfInputs]);
   const { years: altYears, ranOutAge: altRanOutAge } = useMemo(() => runSimulation(whatIfInputs), [whatIfInputs]);
@@ -912,7 +1269,17 @@ export default function RetirementCalculator() {
   const fiDeltaDays = daysUntilFI != null && altDaysUntilFI != null ? altDaysUntilFI - daysUntilFI : null;
   const altFinalYear = altYears[altYears.length - 1];
 
-  const baselineDraft = { profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension, lumpSums };
+  const baselineDraft = {
+    profile,
+    work,
+    expensesState,
+    cash: convertedCash,
+    investments: convertedInvestments,
+    retirement: convertedRetirement,
+    withdrawalOrder,
+    pension,
+    lumpSums,
+  };
   const newLumpSumRow = (id) => ({
     id,
     leverId: "lumpsum",
@@ -945,28 +1312,27 @@ export default function RetirementCalculator() {
     );
 
   const investedWealth =
-    cash.amount +
-    investments.filter((i) => i.type !== "house").reduce((s, i) => s + i.amount, 0) +
-    retirement.reduce((s, r) => s + r.amount, 0);
+    convertedCash.amount +
+    convertedInvestments.filter((i) => i.type !== "house").reduce((s, i) => s + i.amount, 0) +
+    convertedRetirement.reduce((s, r) => s + r.amount, 0);
   const annualSpending = expensesState.monthly * 12;
 
   const realReturn = useMemo(() => {
-    const nominal = weightedAvgGrowth(baselineDraft);
+    const nominal = weightedAvgGrowth({ cash: convertedCash, investments: convertedInvestments, retirement: convertedRetirement });
     return nominal - expensesState.inflation;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cash, investments, retirement, expensesState.inflation]);
+  }, [convertedCash, convertedInvestments, convertedRetirement, expensesState.inflation]);
 
   const monthlySavings = useMemo(() => {
     let total = 0;
-    investments
+    convertedInvestments
       .filter((i) => i.type !== "house")
       .forEach((i) => {
         const freqMult = i.contributionFrequency === "yearly" ? 1 : 12;
         total += (i.contribution || 0) * freqMult;
       });
-    retirement.forEach((r) => (total += r.contribution || 0));
+    convertedRetirement.forEach((r) => (total += r.contribution || 0));
     return total / 12;
-  }, [investments, retirement]);
+  }, [convertedInvestments, convertedRetirement]);
 
   // ---- gamified "you just bought yourself N days of freedom" toasts ----
   const gamifyTimer = useRef(null);
@@ -974,10 +1340,10 @@ export default function RetirementCalculator() {
   const nwSnapshot = useRef(null);
   const firstComputeDone = useRef(false);
   useEffect(() => {
-    if (!loaded || showChoice) return;
+    if (!loaded || showChoice || showOnboarding) return;
     if (gamifyTimer.current) clearTimeout(gamifyTimer.current);
     gamifyTimer.current = setTimeout(() => {
-      const currentNW = cash.amount + investments.reduce((s, i) => s + equityOf(i), 0) + retirement.reduce((s, r) => s + r.amount, 0);
+      const currentNW = convertedCash.amount + convertedInvestments.reduce((s, i) => s + equityOf(i), 0) + convertedRetirement.reduce((s, r) => s + r.amount, 0);
       if (!firstComputeDone.current) {
         firstComputeDone.current = true;
         fiSnapshot.current = daysUntilFI;
@@ -999,7 +1365,7 @@ export default function RetirementCalculator() {
     }, 900);
     return () => clearTimeout(gamifyTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [daysUntilFI, cash, investments, retirement, loaded, showChoice, currency]);
+  }, [daysUntilFI, convertedCash, convertedInvestments, convertedRetirement, loaded, showChoice, showOnboarding, currency]);
 
   const seriesKeys = useMemo(() => {
     const invNames = withDisplayNames(investments, "Investment").map((i) => i.displayName);
@@ -1020,7 +1386,7 @@ export default function RetirementCalculator() {
   }, [years]);
 
   const currentNetWorth =
-    cash.amount + investments.reduce((s, i) => s + equityOf(i), 0) + retirement.reduce((s, r) => s + r.amount, 0);
+    convertedCash.amount + convertedInvestments.reduce((s, i) => s + equityOf(i), 0) + convertedRetirement.reduce((s, r) => s + r.amount, 0);
   const finalYear = years[years.length - 1];
 
   // synthetic "before the simulation starts" record so age = currentAge can still show a diff
@@ -1205,6 +1571,275 @@ export default function RetirementCalculator() {
     );
   }
 
+  if (showOnboarding && !onboardingStarted) {
+    return (
+      <div
+        className="min-h-screen flex flex-col items-center justify-center px-6 text-center text-white"
+        style={{ background: heroGradient, fontFamily: "'Inter', sans-serif" }}
+      >
+        {fontLink}
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5" style={{ background: "rgba(255,255,255,0.12)" }}>
+          <Rocket size={30} color="#FFC24B" />
+        </div>
+        <h1 className="text-3xl font-bold mb-3 leading-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          Let's get you retirement ready! 🎉
+        </h1>
+        <p className="text-sm mb-8 max-w-xs" style={{ color: "#D8CFF0" }}>
+          A dozen quick questions and we'll build your whole plan — money, home, and pension, all of it.
+        </p>
+        <button
+          onClick={() => setOnboardingStarted(true)}
+          className="w-full max-w-xs font-semibold rounded-full py-3.5"
+          style={{ background: "#FFC24B", color: "#1B1435" }}
+        >
+          Get started →
+        </button>
+        <button
+          onClick={() => setShowOnboarding(false)}
+          className="mt-4 text-xs underline decoration-dotted"
+          style={{ color: "#C9BEEA" }}
+        >
+          Skip for now, I'll enter things myself
+        </button>
+      </div>
+    );
+  }
+
+  if (showOnboarding && onboardingStarted) {
+    const steps = getWizardSteps(wizardAnswers);
+    const step = steps[Math.min(wizardStepIndex, steps.length - 1)];
+    const progress = (wizardStepIndex / steps.length) * 100;
+    const isLast = wizardStepIndex === steps.length - 1;
+
+    const goNext = () => {
+      if (isLast) finishOnboarding(wizardAnswers);
+      else setWizardStepIndex((i) => Math.min(i + 1, steps.length - 1));
+    };
+    const goBack = () => setWizardStepIndex((i) => Math.max(0, i - 1));
+    const answerYesNo = (val) => {
+      setWizardAnswers((a) => ({ ...a, [step.id]: val }));
+      setTimeout(() => {
+        if (isLast) finishOnboarding({ ...wizardAnswers, [step.id]: val });
+        else setWizardStepIndex((i) => i + 1);
+      }, 150);
+    };
+
+    return (
+      <div className="min-h-screen flex flex-col" style={{ background: "#FAF9FE", fontFamily: "'Inter', sans-serif" }}>
+        {fontLink}
+        <div className="px-6 pt-8">
+          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#EEE9F7" }}>
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{ width: `${progress}%`, background: "linear-gradient(90deg, #4C8DFF, #7C5CFC)" }}
+            />
+          </div>
+          <div className="text-xs text-stone-400 mt-2">
+            Question {wizardStepIndex + 1} of {steps.length}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
+          <h2 className="text-xl font-semibold mb-5 leading-snug" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            {step.question}
+          </h2>
+
+          {step.type === "yesno" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => answerYesNo(true)}
+                className="rounded-2xl py-7 text-lg font-semibold"
+                style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => answerYesNo(false)}
+                className="rounded-2xl py-7 text-lg font-semibold"
+                style={{ background: "#FF6B6B1A", color: "#B23A22" }}
+              >
+                No
+              </button>
+            </div>
+          ) : step.type === "investlist" ? (
+            <div className="text-left">
+              {wizardAnswers.investmentsList.map((item, idx) => (
+                <div key={item.id} className="rounded-2xl bg-white p-3.5 mb-3 shadow-sm border border-stone-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-stone-400">Investment {idx + 1}</span>
+                    {wizardAnswers.investmentsList.length > 1 && (
+                      <button onClick={() => wizardRemoveItem("investmentsList", item.id)} className="text-stone-300 hover:text-rose-500">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <Field label="Name">
+                    <TextInput value={item.name} onChange={(v) => wizardUpdateItem("investmentsList", item.id, { name: v })} />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Amount today">
+                      <NumberInput accent="#4C8DFF" value={item.amount} onChange={(v) => wizardUpdateItem("investmentsList", item.id, { amount: v })} />
+                    </Field>
+                    <Field label="Add per month">
+                      <NumberInput accent="#4C8DFF" value={item.contribution} onChange={(v) => wizardUpdateItem("investmentsList", item.id, { contribution: v })} />
+                    </Field>
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={() => wizardAddItem("investmentsList", { name: "Investment", amount: 10000, contribution: 200 })}
+                className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
+                style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
+              >
+                + Add another investment
+              </button>
+              <button
+                onClick={goNext}
+                className="w-full rounded-full py-3.5 font-semibold text-white"
+                style={{ background: "linear-gradient(90deg, #4C8DFF, #7C5CFC)" }}
+              >
+                {isLast ? "See my results →" : "Next →"}
+              </button>
+            </div>
+          ) : step.type === "houselist" ? (
+            <div className="text-left">
+              {wizardAnswers.housesList.map((item, idx) => (
+                <div key={item.id} className="rounded-2xl bg-white p-3.5 mb-3 shadow-sm border border-stone-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-stone-400">{idx === 0 ? "Primary home" : `Property ${idx + 1}`}</span>
+                    {wizardAnswers.housesList.length > 1 && (
+                      <button onClick={() => wizardRemoveItem("housesList", item.id)} className="text-stone-300 hover:text-rose-500">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <Field label="Name">
+                    <TextInput value={item.name} onChange={(v) => wizardUpdateItem("housesList", item.id, { name: v })} />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Value today">
+                      <NumberInput accent="#4C8DFF" value={item.value} onChange={(v) => wizardUpdateItem("housesList", item.id, { value: v })} />
+                    </Field>
+                    <Field label="Mortgage left (0 if none)">
+                      <NumberInput accent="#4C8DFF" value={item.mortgageBalance} onChange={(v) => wizardUpdateItem("housesList", item.id, { mortgageBalance: v })} />
+                    </Field>
+                  </div>
+                  <Field label="Monthly mortgage payment (0 if none)">
+                    <NumberInput accent="#4C8DFF" value={item.mortgagePayment} onChange={(v) => wizardUpdateItem("housesList", item.id, { mortgagePayment: v })} />
+                  </Field>
+                </div>
+              ))}
+              <button
+                onClick={() => wizardAddItem("housesList", { name: "Rental property", value: 250000, mortgageBalance: 100000, mortgagePayment: 900 })}
+                className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
+                style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
+              >
+                + Add another property
+              </button>
+              <button
+                onClick={goNext}
+                className="w-full rounded-full py-3.5 font-semibold text-white"
+                style={{ background: "linear-gradient(90deg, #4C8DFF, #7C5CFC)" }}
+              >
+                {isLast ? "See my results →" : "Next →"}
+              </button>
+            </div>
+          ) : step.type === "retirelist" ? (
+            <div className="text-left">
+              {wizardAnswers.retirementList.map((item, idx) => (
+                <div key={item.id} className="rounded-2xl bg-white p-3.5 mb-3 shadow-sm border border-stone-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-stone-400">Account {idx + 1}</span>
+                    {wizardAnswers.retirementList.length > 1 && (
+                      <button onClick={() => wizardRemoveItem("retirementList", item.id)} className="text-stone-300 hover:text-rose-500">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <Field label="Name">
+                    <TextInput value={item.name} onChange={(v) => wizardUpdateItem("retirementList", item.id, { name: v })} />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Balance today">
+                      <NumberInput accent="#4C8DFF" value={item.balance} onChange={(v) => wizardUpdateItem("retirementList", item.id, { balance: v })} />
+                    </Field>
+                    <Field label="Added per year">
+                      <NumberInput accent="#4C8DFF" value={item.contribution} onChange={(v) => wizardUpdateItem("retirementList", item.id, { contribution: v })} />
+                    </Field>
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={() => wizardAddItem("retirementList", { name: "Retirement account", balance: 10000, contribution: 4000 })}
+                className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
+                style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
+              >
+                + Add another account
+              </button>
+              <button
+                onClick={goNext}
+                className="w-full rounded-full py-3.5 font-semibold text-white"
+                style={{ background: "linear-gradient(90deg, #4C8DFF, #7C5CFC)" }}
+              >
+                {isLast ? "See my results →" : "Next →"}
+              </button>
+            </div>
+          ) : step.type === "pension" ? (
+            <div className="text-left">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Starts at age">
+                  <NumberInput
+                    accent="#4C8DFF"
+                    value={wizardAnswers.pensionStartAge}
+                    onChange={(v) => setWizardAnswers((a) => ({ ...a, pensionStartAge: v }))}
+                  />
+                </Field>
+                <Field label="% of final salary">
+                  <NumberInput
+                    accent="#4C8DFF"
+                    value={wizardAnswers.pensionPercent}
+                    suffix="%"
+                    onChange={(v) => setWizardAnswers((a) => ({ ...a, pensionPercent: v }))}
+                  />
+                </Field>
+              </div>
+              <button
+                onClick={goNext}
+                className="w-full mt-2 rounded-full py-3.5 font-semibold text-white"
+                style={{ background: "linear-gradient(90deg, #4C8DFF, #7C5CFC)" }}
+              >
+                {isLast ? "See my results →" : "Next →"}
+              </button>
+            </div>
+          ) : (
+            <>
+              <WizardInput
+                value={wizardAnswers[step.id]}
+                suffix={step.suffix}
+                onChange={(v) => setWizardAnswers((a) => ({ ...a, [step.id]: v }))}
+              />
+              <button
+                onClick={goNext}
+                className="w-full mt-6 rounded-full py-3.5 font-semibold text-white"
+                style={{ background: "linear-gradient(90deg, #4C8DFF, #7C5CFC)" }}
+              >
+                {isLast ? "See my results →" : "Next →"}
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="pb-8 text-center">
+          {wizardStepIndex > 0 && (
+            <button onClick={goBack} className="text-xs text-stone-400">
+              ← Back
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen" style={{ background: "#FAF9FE", color: "#231D3B", fontFamily: "'Inter', sans-serif" }}>
       {fontLink}
@@ -1235,14 +1870,100 @@ export default function RetirementCalculator() {
         </div>
       )}
 
+      {showMethodology && (
+        <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
+          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 text-white" style={{ background: heroGradient }}>
+            <h2 className="text-lg font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              How this app works
+            </h2>
+            <button onClick={() => setShowMethodology(false)} className="rounded-full p-1.5" style={{ background: "rgba(255,255,255,0.15)" }}>
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="px-5 py-6 space-y-6 max-w-xl mx-auto">
+            <p className="text-sm text-stone-500 leading-relaxed">
+              No finance degree needed — here's what's actually happening behind every number, in plain English.
+            </p>
+
+            {[
+              {
+                color: SECTION_COLORS.income,
+                title: "The year-by-year simulation",
+                body: "For every year from your current age to your life expectancy, the app adds up everything coming in — salary, pension, rental income, dividends — and subtracts your expenses and any mortgage payments. If there's money left over, it's added to your cash savings. If there's a shortfall, it's covered automatically by pulling from your accounts, following the exact order you set on the \"Withdrawal & sale order\" screen — your choice for whether cash, a specific fund, a retirement account, or a property gets tapped first, second, and so on.",
+              },
+              {
+                color: SECTION_COLORS.investments,
+                title: "Growth, every single year",
+                body: "Each bucket (cash, each investment, each retirement account, each property) grows by the yearly rate you set for it, compounding automatically. That growth is applied before that year's withdrawals — so money you need this year still earns a full year's return first.",
+              },
+              {
+                color: SECTION_COLORS.retirement,
+                title: "Taxes on withdrawals",
+                body: "Your tax rate is one flat \"average\" percentage — the share of income you actually pay overall, not your top bracket. Salary and pension income are taxed at this rate. A retirement account marked \"taxed when withdrawn\" is grossed up when you draw from it, so the tax (and any early-withdrawal penalty) comes out of that withdrawal itself, not your other accounts — you always end up with exactly the amount you needed.",
+              },
+              {
+                color: SECTION_COLORS.lumpsums,
+                title: "Mortgages",
+                body: "Each year, your mortgage payment splits into interest and principal based on the rate you set (fixed stays constant; floating always tracks your Cash section's interest rate). You can enter either the interest rate or the remaining years, and the app solves for the other one using the same math a bank would use. Mortgage payments never increase with inflation — but rent (from a rental property, or after selling and renting) always does.",
+              },
+              {
+                color: "#0EA5E9",
+                title: "Selling a house",
+                body: "A property only gets sold if it's marked \"sellable\" and the withdrawal order actually needs it that year — and when it does, the whole thing sells at once (not gradually), for its full market value. Tax applies only to the gain above what you paid for it, not the whole sale price. Afterward, you can choose to buy a smaller or bigger place, start renting, or just bank the cash — and optionally put any leftover into a CD or the market at a rate you set.",
+              },
+              {
+                color: SECTION_COLORS.cash,
+                title: "\"Financial Independence\" date",
+                body: "This isn't a rule-of-thumb formula (like \"25× your spending\"). The app actually tests, year by year, the earliest age at which you could stop working and still never run out of money all the way to your life expectancy — running the full simulation above, repeatedly, until it finds that point. That's why it always agrees with your Results chart.",
+              },
+              {
+                color: SECTION_COLORS.profile,
+                title: "Multiple currencies",
+                body: "If you turn on \"multiple currencies\" in your Profile, each account can be set to its own currency. Everything is converted into your one \"main currency\" (also set in Profile) using live exchange rates fetched automatically, with an offline approximate table as a backup if that fetch fails — so results are always shown as one consistent total.",
+              },
+            ].map((s) => (
+              <div key={s.title}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+                  <h3 className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                    {s.title}
+                  </h3>
+                </div>
+                <p className="text-xs text-stone-500 leading-relaxed pl-4.5">{s.body}</p>
+              </div>
+            ))}
+
+            <div className="rounded-2xl px-4 py-3.5 text-xs leading-relaxed" style={{ background: "#FFF1EC", color: "#B23A22" }}>
+              This is a simplified planning tool built to help you explore "what if" scenarios — it is not
+              financial, tax, or legal advice. Real taxes, investment products, and mortgages are more complex
+              than any of the assumptions above. Please talk to a qualified professional before making real
+              decisions.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* hero header */}
       <div className="px-5 pt-8 pb-6 text-white rise-in" style={{ background: heroGradient }}>
-        <h1 className="text-[26px] font-semibold tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-          Retirement Runway
-        </h1>
-        <p className="text-sm mt-1" style={{ color: "#C9BEEA" }}>
-          See how long your money lasts
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-[26px] font-semibold tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Retirement Runway
+            </h1>
+            <p className="text-sm mt-1" style={{ color: "#C9BEEA" }}>
+              See how long your money lasts
+            </p>
+          </div>
+          <button
+            onClick={() => setShowMethodology(true)}
+            title="How this app calculates your numbers"
+            className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium shrink-0"
+            style={{ background: "rgba(255,255,255,0.14)", color: "white" }}
+          >
+            <Info size={14} /> Info
+          </button>
+        </div>
 
         <div className="mt-5 flex items-end gap-6">
           <button onClick={() => setShowNetWorthBreakdown((v) => !v)} className="text-left">
@@ -1265,19 +1986,26 @@ export default function RetirementCalculator() {
 
         {showNetWorthBreakdown && (
           <div className="mt-3 rounded-xl p-3 text-xs" style={{ background: "rgba(255,255,255,0.08)" }}>
-            <div className="flex justify-between py-1">
-              <span style={{ color: "#C9BEEA" }}>Cash</span>
-              <span>{fmt(cash.amount, currency)}</span>
+            <div className="text-[10px] mb-1.5" style={{ color: "#8B7FB0" }}>
+              All figures converted to your base currency ({currency}).
             </div>
-            {investments
+            <div className="flex justify-between py-1">
+              <span style={{ color: "#C9BEEA" }}>
+                Cash {cash.currency && cash.currency !== currency ? `(${cash.currency})` : ""}
+              </span>
+              <span>{fmt(convertedCash.amount, currency)}</span>
+            </div>
+            {convertedInvestments
               .filter((i) => i.type !== "house")
-              .map((inv) => (
+              .map((inv, idx) => (
                 <div key={inv.id} className="flex justify-between py-1">
-                  <span style={{ color: "#C9BEEA" }}>{inv.name || "Investment"}</span>
+                  <span style={{ color: "#C9BEEA" }}>
+                    {inv.name || "Investment"} {investments[idx]?.currency && investments[idx].currency !== currency ? `(${investments[idx].currency})` : ""}
+                  </span>
                   <span>{fmt(inv.amount, currency)}</span>
                 </div>
               ))}
-            {investments
+            {convertedInvestments
               .filter((i) => i.type === "house")
               .map((inv) => {
                 const eq = Math.max(0, inv.amount - (inv.mortgageBalance || 0));
@@ -1293,9 +2021,11 @@ export default function RetirementCalculator() {
                   </div>
                 );
               })}
-            {retirement.map((r) => (
+            {convertedRetirement.map((r, idx) => (
               <div key={r.id} className="flex justify-between py-1">
-                <span style={{ color: "#C9BEEA" }}>{r.name || "Retirement account"}</span>
+                <span style={{ color: "#C9BEEA" }}>
+                  {r.name || "Retirement account"} {retirement[idx]?.currency && retirement[idx].currency !== currency ? `(${retirement[idx].currency})` : ""}
+                </span>
                 <span>{fmt(r.amount, currency)}</span>
               </div>
             ))}
@@ -1505,6 +2235,31 @@ export default function RetirementCalculator() {
                     options={REGIONS.map((r) => ({ value: r, label: r }))}
                   />
                 </Field>
+                <Field label="Main currency (results are shown in this)">
+                  <SelectInput
+                    value={profile.currency || "USD"}
+                    onChange={(v) => setProfile({ ...profile, currency: v })}
+                    options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                  />
+                </Field>
+                <Field label="Do you hold money in more than one currency?">
+                  <SelectInput
+                    value={profile.multiCurrency ? "yes" : "no"}
+                    onChange={(v) => {
+                      const multi = v === "yes";
+                      setProfile({ ...profile, multiCurrency: multi });
+                      if (!multi) {
+                        setCash((c) => ({ ...c, currency: profile.currency }));
+                        setInvestments((prev) => prev.map((i) => ({ ...i, currency: profile.currency })));
+                        setRetirement((prev) => prev.map((r) => ({ ...r, currency: profile.currency })));
+                      }
+                    }}
+                    options={[
+                      { value: "no", label: "No — everything is in one currency" },
+                      { value: "yes", label: "Yes — show currency per account" },
+                    ]}
+                  />
+                </Field>
                 <Field label="Expected average tax rate (Average)">
                   <NumberInput
                     accent={SECTION_COLORS.profile}
@@ -1519,6 +2274,32 @@ export default function RetirementCalculator() {
               <p className="text-xs text-stone-400 mt-2">
                 This is your <strong>average effective tax rate</strong> — the share of income and withdrawals
                 actually paid in tax overall — not your top marginal bracket.
+              </p>
+            )}
+            {activeSection === "profile" && profile.multiCurrency && (
+              <div className="mt-4 rounded-xl bg-white p-3 shadow-sm flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-semibold text-stone-600">Exchange rates</div>
+                  <div className="text-[11px] text-stone-400">
+                    {fxSource === "live" && "Live rates, fetched just now"}
+                    {fxSource === "loading" && "Fetching live rates…"}
+                    {fxSource === "fallback" && "Using approximate offline rates"}
+                  </div>
+                </div>
+                <button
+                  onClick={fetchFxRates}
+                  className="text-xs font-semibold rounded-full px-3 py-1.5"
+                  style={{ background: `${SECTION_COLORS.profile}1A`, color: SECTION_COLORS.profile }}
+                >
+                  Refresh
+                </button>
+              </div>
+            )}
+            {activeSection === "profile" && (
+              <p className="text-xs text-stone-400 mt-3">
+                Every investment, retirement account, and your cash can each be set to a different currency (on
+                their own tabs) — everything gets converted to your base currency above for all totals and
+                calculations.
               </p>
             )}
 
@@ -1563,8 +2344,8 @@ export default function RetirementCalculator() {
             {activeSection === "income" && (
               <p className="text-xs text-stone-400 mt-3 leading-relaxed">
                 <strong>Years still working</strong> controls everything time-limited: once it runs out, salary
-                stops, and so do all contributions below (to investments, retirement accounts, and mortgage
-                payments) — e.g. set it to 5 and nothing is added to any account from year 6 onward.
+                stops, and so do all contributions (set per account on the Investments and Retirement tabs) and
+                mortgage payments — e.g. set it to 5 and nothing is added to any account from year 6 onward.
                 <br />
                 <strong>Monthly expenses</strong> above does <strong>not</strong> include mortgage payments —
                 those are set per property on the Investments tab and handled separately. Rental income there
@@ -1572,69 +2353,20 @@ export default function RetirementCalculator() {
               </p>
             )}
 
-            {activeSection === "income" && (investments.some((i) => i.type !== "house") || retirement.length > 0) && (
-              <div className="mt-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "#8A81A6" }}>
-                  Contributions
-                </h3>
-                <p className="text-xs text-stone-400 mb-3">
-                  These stop automatically the moment "years still working" above runs out — no contributions
-                  are added in any year after you stop working.
-                </p>
-                {investments
-                  .filter((inv) => inv.type !== "house")
-                  .map((inv) => {
-                    const color = invColor(inv.id);
-                    return (
-                      <div key={inv.id} className="rounded-xl bg-white p-3 mb-2 shadow-sm" style={{ borderLeft: `4px solid ${color}` }}>
-                        <div className="flex items-center gap-1.5 text-xs font-semibold mb-2" style={{ color }}>
-                          <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-                          {inv.name || "Investment"}
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <Field label="Contribution">
-                            <NumberInput
-                              accent={color}
-                              value={inv.contribution || 0}
-                              onChange={(v) => updateInvestment(inv.id, { contribution: v })}
-                            />
-                          </Field>
-                          <Field label="Frequency">
-                            <SelectInput
-                              value={inv.contributionFrequency || "monthly"}
-                              onChange={(v) => updateInvestment(inv.id, { contributionFrequency: v })}
-                              options={[
-                                { value: "monthly", label: "Per month" },
-                                { value: "yearly", label: "Per year" },
-                              ]}
-                            />
-                          </Field>
-                        </div>
-                      </div>
-                    );
-                  })}
-                {retirement.map((r) => {
-                  const color = retColor(r.id);
-                  return (
-                    <div key={r.id} className="rounded-xl bg-white p-3 mb-2 shadow-sm" style={{ borderLeft: `4px solid ${color}` }}>
-                      <div className="flex items-center gap-1.5 text-xs font-semibold mb-2" style={{ color }}>
-                        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-                        {r.name || "Retirement account"}
-                      </div>
-                      <Field label="Annual contribution">
-                        <NumberInput accent={color} value={r.contribution || 0} onChange={(v) => updateRetirement(r.id, { contribution: v })} />
-                      </Field>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
             {activeSection === "cash" && (
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Cash on hand">
                   <NumberInput accent={SECTION_COLORS.cash} value={cash.amount} onChange={(v) => setCash({ ...cash, amount: v })} />
                 </Field>
+                {profile.multiCurrency && (
+                  <Field label="Currency">
+                    <SelectInput
+                      value={cash.currency || currency}
+                      onChange={(v) => setCash({ ...cash, currency: v })}
+                      options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                    />
+                  </Field>
+                )}
                 <Field label="Interest rate">
                   <NumberInput
                     accent={SECTION_COLORS.cash}
@@ -1690,6 +2422,15 @@ export default function RetirementCalculator() {
                             options={REGIONS.map((r) => ({ value: r, label: r }))}
                           />
                         </Field>
+                        {profile.multiCurrency && (
+                          <Field label="Currency">
+                            <SelectInput
+                              value={inv.currency || currency}
+                              onChange={(v) => updateInvestment(inv.id, { currency: v })}
+                              options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                            />
+                          </Field>
+                        )}
                         <Field label={inv.type === "house" ? "Current market value" : "Current value"}>
                           <NumberInput accent={color} value={inv.amount} onChange={(v) => updateInvestment(inv.id, { amount: v })} />
                         </Field>
@@ -1714,13 +2455,25 @@ export default function RetirementCalculator() {
                       </div>
 
                       {inv.type !== "house" && (
-                        <button
-                          onClick={() => setActiveSection("income")}
-                          className="text-xs font-medium underline decoration-dotted mt-1"
-                          style={{ color }}
-                        >
-                          Contribution set in Income & expenses →
-                        </button>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="Ongoing contribution">
+                            <NumberInput
+                              accent={color}
+                              value={inv.contribution || 0}
+                              onChange={(v) => updateInvestment(inv.id, { contribution: v })}
+                            />
+                          </Field>
+                          <Field label="Frequency">
+                            <SelectInput
+                              value={inv.contributionFrequency || "monthly"}
+                              onChange={(v) => updateInvestment(inv.id, { contributionFrequency: v })}
+                              options={[
+                                { value: "monthly", label: "Per month" },
+                                { value: "yearly", label: "Per year" },
+                              ]}
+                            />
+                          </Field>
+                        </div>
                       )}
 
                       {inv.type === "house" && (
@@ -1795,6 +2548,31 @@ export default function RetirementCalculator() {
                                     onChange={(v) => updateInvestment(inv.id, { postSaleRent: v })}
                                   />
                                 </Field>
+                              )}
+                              {(inv.postSaleAction === "none" || inv.postSaleAction === "rent") && (
+                                <>
+                                  <Field label="What should happen to the money?">
+                                    <SelectInput
+                                      value={inv.reinvestAs || "cash"}
+                                      onChange={(v) => updateInvestment(inv.id, { reinvestAs: v })}
+                                      options={[
+                                        { value: "cash", label: "Keep as cash" },
+                                        { value: "cd", label: "Put it in a CD" },
+                                        { value: "market", label: "Invest it in the market" },
+                                      ]}
+                                    />
+                                  </Field>
+                                  {(inv.reinvestAs === "cd" || inv.reinvestAs === "market") && (
+                                    <Field label={inv.reinvestAs === "cd" ? "CD interest rate" : "Expected market return"}>
+                                      <NumberInput
+                                        accent={color}
+                                        value={inv.reinvestRate || 0}
+                                        suffix="%/yr"
+                                        onChange={(v) => updateInvestment(inv.id, { reinvestRate: v })}
+                                      />
+                                    </Field>
+                                  )}
+                                </>
                               )}
                               {(inv.postSaleAction === "rebuy" || inv.postSaleAction === "resize" || inv.postSaleAction === "rent") && (
                                 <p className="text-xs text-stone-400 -mt-1 mb-2">
@@ -1990,6 +2768,15 @@ export default function RetirementCalculator() {
                         <Field label="Current balance">
                           <NumberInput accent={color} value={r.amount} onChange={(v) => updateRetirement(r.id, { amount: v })} />
                         </Field>
+                        {profile.multiCurrency && (
+                          <Field label="Currency">
+                            <SelectInput
+                              value={r.currency || currency}
+                              onChange={(v) => updateRetirement(r.id, { currency: v })}
+                              options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                            />
+                          </Field>
+                        )}
                         <Field label="Growth rate">
                           <NumberInput
                             accent={color}
@@ -2001,14 +2788,14 @@ export default function RetirementCalculator() {
                         <Field label="Minimum withdrawal age">
                           <NumberInput accent={color} value={r.minAge || 0} onChange={(v) => updateRetirement(r.id, { minAge: v })} />
                         </Field>
+                        <Field label="Annual contribution">
+                          <NumberInput
+                            accent={color}
+                            value={r.contribution || 0}
+                            onChange={(v) => updateRetirement(r.id, { contribution: v })}
+                          />
+                        </Field>
                       </div>
-                      <button
-                        onClick={() => setActiveSection("income")}
-                        className="text-xs font-medium underline decoration-dotted mb-3 inline-block"
-                        style={{ color }}
-                      >
-                        Contribution set in Income & expenses →
-                      </button>
                       <Field label="Tax treatment">
                         <SelectInput
                           value={r.taxTreatment || "pretax"}
@@ -2201,7 +2988,7 @@ export default function RetirementCalculator() {
                   label={{ value: "Age", position: "insideBottom", offset: -3, fontSize: 11, fill: "#8A81A6" }}
                 />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: "#8A81A6" }} width={45} />
-                <Tooltip formatter={(v) => fmt(v, currency)} labelFormatter={(l) => `Age ${l}`} />
+                <Tooltip content={(props) => <StackedChartTooltip {...props} currency={currency} />} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {seriesKeys.map((key, idx) => (
                   <Area
@@ -2318,12 +3105,18 @@ export default function RetirementCalculator() {
             remaining mortgage balance); a house marked "not sellable" is never drawn down. When a sellable house
             with a post-sale plan (rebuy, resize, or rent) is tapped, 100% of its equity is liquidated that year —
             not just what's needed — and the plan takes effect immediately; a house with no plan is drawn down
-            gradually instead. Selling home equity is taxed only on the gain above its purchase price. Rental
-            income and post-sale rent both grow with inflation every year; mortgage payments never do — a
-            floating-rate mortgage's interest cost still follows your Cash section's rate. Monthly expenses
-            exclude mortgage payments. The tax rate is a flat average, not marginal brackets. Lump sums hit as a
-            single cash event in the year they occur, untaxed and not inflation-adjusted. Growth is applied once
-            per year, before that year's withdrawals.
+            gradually instead. If you chose "rent" or "take the cash" and asked to reinvest the leftover in a CD
+            or the market, that money keeps growing at the rate you set and stays available for future
+            withdrawals — it just keeps the sold property's name and color on the chart, since it's the same
+            underlying bucket repurposed rather than a brand-new one. Selling home equity is taxed only on the
+            gain above its purchase price. Rental income and post-sale rent both grow with inflation every year;
+            mortgage payments never do — a floating-rate mortgage's interest cost still follows your Cash
+            section's rate. Monthly expenses exclude mortgage payments. The tax rate is a flat average, not
+            marginal brackets. Lump sums hit as a single cash event in the year they occur, untaxed and not
+            inflation-adjusted. Any bucket set to a different currency than your base currency (Profile tab) is
+            converted using live exchange rates when available, or an approximate offline table if not — check
+            the Profile tab to see which is active. Growth is applied once per year, before that year's
+            withdrawals.
           </div>
         </div>
       ) : tab === "whatif" ? (
