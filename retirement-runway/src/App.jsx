@@ -4,7 +4,7 @@ import {
   ResponsiveContainer, ReferenceLine
 } from "recharts";
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, Home, TrendingUp, Wallet, PiggyBank, User, Sparkles, Rocket, Timer, GitCompare, Info, X, Table2
+  Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, Home, TrendingUp, Wallet, PiggyBank, User, Sparkles, Rocket, Timer, GitCompare, Info, X, Table2
 } from "lucide-react";
 
 // ---------- helpers ----------
@@ -22,6 +22,180 @@ const LANGUAGES = [
   { code: "fr", label: "Français" },
   { code: "it", label: "Italiano" },
 ];
+
+// Every other short UI label/button/option across the app — Field labels, dropdown
+// options, etc. — is translated through this flat English-text-keyed dictionary instead
+// of semantic keys, so wrapping a literal string is just tt("That string") with nothing
+// else to wire up. Falls back to the original English text when no entry exists, so
+// nothing breaks if a spot is missed. Deliberately does NOT cover: country/region/tax-
+// country names (proper nouns, e.g. "France", "Germany" in the tax-country picker),
+// the technical per-country tax-table descriptions, or the Info page's long-form
+// explanations — those are excluded on purpose (see the Profile tab's language note).
+const PHRASES = {
+  "% of final salary": { fr: "% du dernier salaire", it: "% dell'ultimo stipendio" },
+  "% of surplus kept as cash": { fr: "% du surplus gardé en liquidités", it: "% del surplus tenuto in liquidità" },
+  "Add per month": { fr: "Ajout par mois", it: "Aggiunta al mese" },
+  "Added per year": { fr: "Ajouté par an", it: "Aggiunto all'anno" },
+  "After selling, what happens?": { fr: "Après la vente, que se passe-t-il ?", it: "Dopo la vendita, cosa succede?" },
+  "Agency / selling fee": { fr: "Frais d'agence / de vente", it: "Commissione di agenzia / vendita" },
+  "Allow withdrawals before minimum age?": { fr: "Autoriser les retraits avant l'âge minimum ?", it: "Consentire prelievi prima dell'età minima?" },
+  "Already taxed — tax-free withdrawal": { fr: "Déjà imposé — retrait non imposable", it: "Già tassato — prelievo esentasse" },
+  "Already taxed — tax-free withdrawal (e.g. Roth)": { fr: "Déjà imposé — retrait non imposable (ex. Roth)", it: "Già tassato — prelievo esentasse (es. Roth)" },
+  "Amount": { fr: "Montant", it: "Importo" },
+  "Amount today": { fr: "Montant aujourd'hui", it: "Importo attuale" },
+  "Annual contribution": { fr: "Cotisation annuelle", it: "Contributo annuale" },
+  "Annual salary (gross)": { fr: "Salaire annuel (brut)", it: "Stipendio annuo (lordo)" },
+  "At age": { fr: "À l'âge de", it: "All'età di" },
+  "Average tax rate": { fr: "Taux d'imposition moyen", it: "Aliquota fiscale media" },
+  "Balance today": { fr: "Solde actuel", it: "Saldo attuale" },
+  "Buy a new home for a set amount": { fr: "Acheter un nouveau logement pour un montant fixe", it: "Comprare una nuova casa per un importo fisso" },
+  "Buy something worth a multiple of the sale price": { fr: "Acheter un bien valant un multiple du prix de vente", it: "Comprare qualcosa che vale un multiplo del prezzo di vendita" },
+  "CD / term deposit (fixed rate)": { fr: "Dépôt à terme (taux fixe)", it: "Deposito vincolato (tasso fisso)" },
+  "Can this property be sold to cover expenses?": { fr: "Ce bien peut-il être vendu pour couvrir des dépenses ?", it: "Questo immobile può essere venduto per coprire le spese?" },
+  "Capital gains tax rate": { fr: "Taux d'imposition sur les plus-values", it: "Aliquota fiscale sulle plusvalenze" },
+  "Cash": { fr: "Liquidités", it: "Liquidità" },
+  "Cash deposit": { fr: "Apport en liquidités", it: "Deposito in contanti" },
+  "Cash on hand": { fr: "Liquidités disponibles", it: "Liquidità disponibile" },
+  "Cost basis (amount originally invested)": { fr: "Base de coût (montant investi à l'origine)", it: "Base di costo (importo investito inizialmente)" },
+  "Could you sell this if you needed the money?": { fr: "Pourriez-vous vendre ce bien si vous aviez besoin d'argent ?", it: "Potresti vendere questo bene se avessi bisogno di denaro?" },
+  "Currency": { fr: "Devise", it: "Valuta" },
+  "Current age": { fr: "Âge actuel", it: "Età attuale" },
+  "Current balance": { fr: "Solde actuel", it: "Saldo attuale" },
+  "Current estimate, at today's salary": { fr: "Estimation actuelle, au salaire d'aujourd'hui", it: "Stima attuale, allo stipendio odierno" },
+  "Current market value": { fr: "Valeur marchande actuelle", it: "Valore di mercato attuale" },
+  "Current value": { fr: "Valeur actuelle", it: "Valore attuale" },
+  "Deposit funded from": { fr: "Apport financé par", it: "Acconto finanziato da" },
+  "Dividend tax rate": { fr: "Taux d'imposition des dividendes", it: "Aliquota fiscale sui dividendi" },
+  "Dividend yield": { fr: "Rendement du dividende", it: "Rendimento da dividendo" },
+  "Dividend-producing": { fr: "Générateur de dividendes", it: "Che genera dividendi" },
+  "Do you hold money in more than one currency?": { fr: "Détenez-vous de l'argent dans plusieurs devises ?", it: "Hai denaro in più di una valuta?" },
+  "Does it rise with inflation?": { fr: "Augmente-t-elle avec l'inflation ?", it: "Aumenta con l'inflazione?" },
+  "Does your spending decline as you age?": { fr: "Vos dépenses diminuent-elles avec l'âge ?", it: "La tua spesa diminuisce con l'età?" },
+  "Early withdrawal penalty": { fr: "Pénalité de retrait anticipé", it: "Penale per prelievo anticipato" },
+  "Expected appreciation": { fr: "Appréciation attendue", it: "Apprezzamento atteso" },
+  "Expected market return": { fr: "Rendement de marché attendu", it: "Rendimento di mercato atteso" },
+  "Fixed": { fr: "Fixe", it: "Fisso" },
+  "Fixed interest rate (today's rate)": { fr: "Taux d'intérêt fixe (taux actuel)", it: "Tasso di interesse fisso (tasso odierno)" },
+  "Fixed number (no bracket table for this country yet)": { fr: "Nombre fixe (pas de barème pour ce pays pour l'instant)", it: "Numero fisso (nessuna tabella per questo paese per ora)" },
+  "Floating": { fr: "Variable", it: "Variabile" },
+  "Forecast": { fr: "Prévisions", it: "Previsioni" },
+  "Frequency": { fr: "Fréquence", it: "Frequenza" },
+  "Full pension needs work until": { fr: "Pension complète nécessite de travailler jusqu'à", it: "Pensione piena richiede di lavorare fino a" },
+  "Growth rate": { fr: "Taux de croissance", it: "Tasso di crescita" },
+  "Home": { fr: "Accueil", it: "Home" },
+  "House / property": { fr: "Maison / bien immobilier", it: "Casa / immobile" },
+  "I know:": { fr: "Je connais :", it: "Conosco:" },
+  "I started working at": { fr: "J'ai commencé à travailler à", it: "Ho iniziato a lavorare a" },
+  "If it's sold, what happens?": { fr: "Si vendu, que se passe-t-il ?", it: "Se venduto, cosa succede?" },
+  "Inflation": { fr: "Inflation", it: "Inflazione" },
+  "Interest rate": { fr: "Taux d'intérêt", it: "Tasso di interesse" },
+  "Invest it in the market": { fr: "L'investir sur les marchés", it: "Investirlo sul mercato" },
+  "Is mortgage interest tax-deductible against this rent?": { fr: "Les intérêts du prêt sont-ils déductibles de ce loyer ?", it: "Gli interessi del mutuo sono deducibili da questo affitto?" },
+  "Keep as cash": { fr: "Garder en liquidités", it: "Tenerlo in liquidità" },
+  "Keep at least": { fr: "Garder au moins", it: "Tenere almeno" },
+  "Keep at most": { fr: "Garder au plus", it: "Tenere al massimo" },
+  "Life expectancy": { fr: "Espérance de vie", it: "Aspettativa di vita" },
+  "Loan term": { fr: "Durée du prêt", it: "Durata del prestito" },
+  "Locked in for": { fr: "Bloqué pendant", it: "Bloccato per" },
+  "Long-run rate (once it converges)": { fr: "Taux à long terme (une fois stabilisé)", it: "Tasso a lungo termine (una volta stabilizzato)" },
+  "Main currency (results are shown in this)": { fr: "Devise principale (les résultats sont affichés dans celle-ci)", it: "Valuta principale (i risultati sono mostrati in questa)" },
+  "Market (growth)": { fr: "Marché (croissance)", it: "Mercato (crescita)" },
+  "Bond / fixed income": { fr: "Obligations / revenu fixe", it: "Obbligazioni / reddito fisso" },
+  "Bond / fixed-income rate": { fr: "Taux obligations / revenu fixe", it: "Tasso obbligazioni / reddito fisso" },
+  "Minimum withdrawal age": { fr: "Âge minimum de retrait", it: "Età minima di prelievo" },
+  "Monthly expenses (non including mortgages)": { fr: "Dépenses mensuelles (hors prêts immobiliers)", it: "Spese mensili (esclusi i mutui)" },
+  "Monthly mortgage payment (0 if none)": { fr: "Mensualité du prêt (0 si aucun)", it: "Rata mensile del mutuo (0 se nessuno)" },
+  "Monthly mortgage payment (fixed, never inflated)": { fr: "Mensualité du prêt (fixe, jamais indexée)", it: "Rata mensile del mutuo (fissa, mai rivalutata)" },
+  "Monthly rent (grows with inflation)": { fr: "Loyer mensuel (augmente avec l'inflation)", it: "Affitto mensile (cresce con l'inflazione)" },
+  "Monthly rent after selling": { fr: "Loyer mensuel après la vente", it: "Affitto mensile dopo la vendita" },
+  "Monthly rent after the sale (grows with inflation)": { fr: "Loyer mensuel après la vente (augmente avec l'inflation)", it: "Affitto mensile dopo la vendita (cresce con l'inflazione)" },
+  "Monthly rent it earns": { fr: "Loyer mensuel perçu", it: "Affitto mensile percepito" },
+  "Mortgage balance remaining": { fr: "Solde restant du prêt", it: "Saldo residuo del mutuo" },
+  "Mortgage left (0 if none)": { fr: "Prêt restant (0 si aucun)", it: "Mutuo residuo (0 se nessuno)" },
+  "Mortgage rate": { fr: "Taux du prêt", it: "Tasso del mutuo" },
+  "Name": { fr: "Nom", it: "Nome" },
+  "No investments yet": { fr: "Aucun investissement pour l'instant", it: "Nessun investimento ancora" },
+  "No — always pay the full amount": { fr: "Non — toujours payer le montant total", it: "No — paga sempre l'importo pieno" },
+  "No — everything is in one currency": { fr: "Non — tout est dans une seule devise", it: "No — tutto è in un'unica valuta" },
+  "No — fixed amount forever": { fr: "Non — montant fixe pour toujours", it: "No — importo fisso per sempre" },
+  "No — locked until min. age": { fr: "Non — bloqué jusqu'à l'âge minimum", it: "No — bloccato fino all'età minima" },
+  "No — never sell (e.g. keep the family home)": { fr: "Non — ne jamais vendre (ex. garder la maison de famille)", it: "No — non vendere mai (es. tenere la casa di famiglia)" },
+  "No — never sell (e.g. primary home)": { fr: "Non — ne jamais vendre (ex. résidence principale)", it: "No — non vendere mai (es. abitazione principale)" },
+  "No — same real spending every year": { fr: "Non — mêmes dépenses réelles chaque année", it: "No — stessa spesa reale ogni anno" },
+  "No — tax the full rent": { fr: "Non — imposer le loyer en totalité", it: "No — tassa l'affitto per intero" },
+  "Ongoing contribution": { fr: "Cotisation continue", it: "Contributo continuativo" },
+  "Pay": { fr: "Payer", it: "Pagare" },
+  "Per month": { fr: "Par mois", it: "Al mese" },
+  "Per year": { fr: "Par an", it: "All'anno" },
+  "Price growth rate": { fr: "Taux de croissance du prix", it: "Tasso di crescita del prezzo" },
+  "Primary home": { fr: "Résidence principale", it: "Abitazione principale" },
+  "Primary residence": { fr: "Résidence principale", it: "Abitazione principale" },
+  "Property value": { fr: "Valeur du bien", it: "Valore dell'immobile" },
+  "Purchase price (bought value)": { fr: "Prix d'achat (valeur d'acquisition)", it: "Prezzo di acquisto (valore d'acquisto)" },
+  "Put it in a CD": { fr: "Le placer dans un dépôt à terme", it: "Metterlo in un deposito vincolato" },
+  "Rate type": { fr: "Type de taux", it: "Tipo di tasso" },
+  "Receive": { fr: "Recevoir", it: "Ricevere" },
+  "Reduce it if I stop working early?": { fr: "La réduire si j'arrête de travailler plus tôt ?", it: "Ridurla se smetto di lavorare prima?" },
+  "Region": { fr: "Région", it: "Regione" },
+  "Region you live in": { fr: "Région où vous vivez", it: "Regione in cui vivi" },
+  "Rent afterward": { fr: "Louer ensuite", it: "Affittare in seguito" },
+  "Rental property": { fr: "Bien locatif", it: "Immobile in affitto" },
+  "Rented out": { fr: "Loué", it: "Affittato" },
+  "Resize factor (0.5 = half, 2 = double)": { fr: "Facteur de redimensionnement (0,5 = moitié, 2 = double)", it: "Fattore di ridimensionamento (0,5 = metà, 2 = doppio)" },
+  "Rest goes into": { fr: "Le reste va dans", it: "Il resto va in" },
+  "Salary currency": { fr: "Devise du salaire", it: "Valuta dello stipendio" },
+  "Salary growth": { fr: "Croissance du salaire", it: "Crescita dello stipendio" },
+  "Set my own number": { fr: "Définir mon propre chiffre", it: "Imposta un mio valore" },
+  "Spending declines with age?": { fr: "Les dépenses diminuent-elles avec l'âge ?", it: "La spesa diminuisce con l'età?" },
+  "Starts at age": { fr: "Commence à l'âge de", it: "Inizia all'età di" },
+  "Tax treatment": { fr: "Traitement fiscal", it: "Trattamento fiscale" },
+  "Taxed when withdrawn": { fr: "Imposé au retrait", it: "Tassato al prelievo" },
+  "Taxed when withdrawn (e.g. 401(k), traditional IRA)": { fr: "Imposé au retrait (ex. 401(k), IRA traditionnel)", it: "Tassato al prelievo (es. 401(k), IRA tradizionale)" },
+  "This is my": { fr: "Ceci est mon/ma", it: "Questa è la mia" },
+  "Type": { fr: "Type", it: "Tipo" },
+  "Usage": { fr: "Usage", it: "Utilizzo" },
+  "Value of the new home": { fr: "Valeur du nouveau logement", it: "Valore della nuova casa" },
+  "Value of the new home to re-buy": { fr: "Valeur du nouveau logement à racheter", it: "Valore della nuova casa da riacquistare" },
+  "Value today": { fr: "Valeur actuelle", it: "Valore attuale" },
+  "What changes?": { fr: "Qu'est-ce qui change ?", it: "Cosa cambia?" },
+  "What should happen to the money?": { fr: "Que doit-il advenir de l'argent ?", it: "Cosa dovrebbe succedere al denaro?" },
+  "Years remaining": { fr: "Années restantes", it: "Anni rimanenti" },
+  "Years still working": { fr: "Années restant à travailler", it: "Anni ancora da lavorare" },
+  "Yes — deduct interest before tax": { fr: "Oui — déduire les intérêts avant impôt", it: "Sì — deduci gli interessi prima delle tasse" },
+  "Yes — include in withdrawal order": { fr: "Oui — inclure dans l'ordre de retrait", it: "Sì — includi nell'ordine di prelievo" },
+  "Yes — include it as a fallback": { fr: "Oui — l'inclure comme solution de repli", it: "Sì — includilo come soluzione di riserva" },
+  "Yes — indexed to inflation": { fr: "Oui — indexée sur l'inflation", it: "Sì — indicizzata all'inflazione" },
+  "Yes — indexed to inflation (most state pensions)": { fr: "Oui — indexée sur l'inflation (la plupart des pensions d'État)", it: "Sì — indicizzata all'inflazione (la maggior parte delle pensioni statali)" },
+  "Yes — scale by years contributed (realistic)": { fr: "Oui — proportionnelle aux années cotisées (réaliste)", it: "Sì — proporzionale agli anni contribuiti (realistico)" },
+  "Yes — show currency per account": { fr: "Oui — afficher la devise par compte", it: "Sì — mostra la valuta per conto" },
+  "Yes — spending eases off through retirement": { fr: "Oui — les dépenses diminuent pendant la retraite", it: "Sì — la spesa diminuisce durante la pensione" },
+  "Yes — with a penalty": { fr: "Oui — avec une pénalité", it: "Sì — con una penale" },
+  "Your average tax rate": { fr: "Votre taux d'imposition moyen", it: "La tua aliquota fiscale media" },
+  "Your capital gains tax rate": { fr: "Votre taux d'imposition sur les plus-values", it: "La tua aliquota fiscale sulle plusvalenze" },
+  "Your dividend tax rate": { fr: "Votre taux d'imposition des dividendes", it: "La tua aliquota fiscale sui dividendi" },
+  "Country (for tax purposes)": { fr: "Pays (à des fins fiscales)", it: "Paese (ai fini fiscali)" },
+  "State (for tax purposes)": { fr: "État (à des fins fiscales)", it: "Stato (ai fini fiscali)" },
+  "Add another change": { fr: "Ajouter un changement", it: "Aggiungi un cambiamento" },
+  "Investment": { fr: "Investissement", it: "Investimento" },
+  "Retirement": { fr: "Retraite", it: "Pensione" },
+  "New weighted-average rate": { fr: "Nouveau taux moyen pondéré", it: "Nuovo tasso medio ponderato" },
+  "New value (starts as your current setting)": { fr: "Nouvelle valeur (part de votre réglage actuel)", it: "Nuovo valore (parte dalla tua impostazione attuale)" },
+  "Today": { fr: "Aujourd'hui", it: "Oggi" },
+  "What if": { fr: "Et si", it: "E se" },
+  "Time until freedom": { fr: "Temps avant la liberté", it: "Tempo all'indipendenza" },
+  "Total net worth over time": { fr: "Patrimoine net total dans le temps", it: "Patrimonio netto totale nel tempo" },
+  "more": { fr: "de plus", it: "in più" },
+  "less": { fr: "de moins", it: "in meno" },
+  "no market accounts yet": { fr: "aucun compte de marché pour l'instant", it: "nessun conto di mercato ancora" },
+  "no CDs yet": { fr: "aucun dépôt à terme pour l'instant", it: "nessun deposito vincolato ancora" },
+  "Mortgage": { fr: "Prêt", it: "Mutuo" },
+  "Add another account": { fr: "Ajouter un autre compte", it: "Aggiungi un altro conto" },
+  "Add another cash account": { fr: "Ajouter un autre compte de liquidités", it: "Aggiungi un altro conto di liquidità" },
+  "Add another investment": { fr: "Ajouter un autre investissement", it: "Aggiungi un altro investimento" },
+  "Add another property": { fr: "Ajouter un autre bien", it: "Aggiungi un altro immobile" },
+  "CD interest rate": { fr: "Taux du dépôt à terme", it: "Tasso del deposito vincolato" },
+  "Where leftover income goes": { fr: "Où va l'argent restant", it: "Dove va il reddito residuo" },
+};
 const STRINGS = {
   en: {
     app_tagline: "See how long your money lasts",
@@ -62,7 +236,7 @@ const STRINGS = {
     wizard_salary: "What's your annual salary, before tax?",
     wizard_salaryGrowth: "How much do you expect your salary to grow, per year?",
     wizard_yearsWorking: "How many more years do you plan to work?",
-    wizard_monthlyExpenses: "What do you spend per month — not including any mortgage?",
+    wizard_monthlyExpenses: "How much do you spend per month — not including any mortgage?",
     wizard_inflation: "What inflation rate should we assume?",
     wizard_taxBracket: "What's your average tax rate — the share of income you actually pay overall?",
     wizard_dividendTaxRate: "And your tax rate specifically on dividend income, if different?",
@@ -79,6 +253,65 @@ const STRINGS = {
     wizard_next: "Next →",
     wizard_see_results: "See my results →",
     wizard_back: "← Back",
+    chart_header: "Balance by bucket, per year",
+    toggle_future: "Future $",
+    toggle_today: "Today's $",
+    chart_bold_today: "today's money",
+    chart_bold_future: "future dollars",
+    chart_note_real: "— every future year's numbers have inflation stripped back out, so you can compare them directly to prices today. This is usually the more honest view of whether you're actually getting ahead.",
+    chart_note_nominal: "— the actual numbers you'd see in your accounts each year, growing partly because of inflation, not just real growth. Switch to \"Today's $\" to strip that out.",
+    chart_tap_hint: "Tap any point on the chart to see what changed that year.",
+    chart_debt_note: "Mortgage debt is shown as a red band below zero, not just netted out of a property's equity.",
+    chart_short_nominal: "What you'd actually see in your account each year.",
+    chart_short_real: "What that's worth in today's prices.",
+    details_label: "Details",
+    mode_total: "Total",
+    time_until_freedom: "Time until freedom",
+    mode_assets_debt: "Assets vs debt",
+    mode_full: "Full breakdown",
+    whatif_title: "What if…",
+    whatif_intro: "Add as many changes as you like — each starts pre-filled with your current value; edit it to whatever you want to test. Nothing here is saved.",
+    whatif_change_label: "Change",
+    whatif_lump_out_of_range: "That age is outside your simulated range ({min}\u2013{max}), so this lump sum is being ignored.",
+    whatif_mortgage_note: "Your monthly payment is calculated automatically from the rate and loan term.",
+    whatif_spending_decline_note: "Living expenses ease off through retirement instead of staying flat — see the Info page for the research behind it.",
+    whatif_market_rate_note: "Blends every market/dividend investment and retirement account's rate, weighted by balance. Weighted average today: {rate}%.",
+    whatif_bond_rate_note: "Blends every bond/fixed-income holding's rate, weighted by balance — kept separate from equities since they're a different risk/return asset class. Weighted average today: {rate}%.",
+    whatif_cd_rate_note: "The rate each CD glides toward once its lock-in ends, weighted by balance. Weighted average: {rate}%.",
+    wizard_note_region: "We've guessed this from your device — tap to confirm, or pick a different one if we got it wrong.",
+    wizard_note_customRates: "If you'd rather not, we'll use deliberately cautious defaults for where you live — not the rosy historical average, but roughly a 25th-percentile decade (i.e. assuming markets do somewhat worse than usual). Your tax rate will also be worked out automatically from your country's tax brackets and your actual income each year, instead of one flat guessed number.",
+    wizard_note_salary: "The full contractual amount — before income tax AND before any mandatory payroll deductions (social security, health insurance...) come out. We work those out automatically for where you live.",
+    wizard_note_taxBracket: "We don't have exact tax brackets for your country yet, so this won't automatically adjust as your income changes each year the way it does for supported countries — it'll just stay fixed at whatever you enter. Edit it any time on the Profile tab.",
+    get_started: "Get started →",
+    skip_manual_entry: "Skip for now, I'll enter things myself",
+    edit_label: "Edit",
+    refresh_label: "Refresh",
+    state_employer_pension: "State / employer pension",
+    have_one_button: "I have one",
+    living_expenses_label: "Living expenses",
+    cost_basis_note: "Only the gain above the purchase price is taxed when sold.",
+    celebration_dismiss: "Nice!",
+    how_this_app_works: "How this app works",
+    shortfall_why: "Why {amount} was needed — age {age}",
+    shortfall_rent_after_selling: "Rent (after selling)",
+    shortfall_salary: "− Salary (after tax)",
+    shortfall_pension: "− Pension (after tax)",
+    shortfall_rent_income: "− Rent (after tax)",
+    shortfall_dividends: "− Dividends (after tax)",
+    shortfall_lump_received: "− Lump sum received",
+    shortfall_lump_paid: "+ Lump sum paid out",
+    shortfall_total: "= Shortfall to cover",
+    debt_mortgage_label: "Debt (mortgage)",
+    debt_row_note: "Total mortgage balance remaining across all properties — shown negative since it's owed, not held.",
+    real_terms_breakdown_note: "Balances above are in today's money; the itemized lines below stay in that year's actual (future dollar) amounts, since they describe specific transactions.",
+    at_life_expectancy: "At life expectancy",
+    in_todays_money: "in today's money",
+    years_simulated: "Years simulated",
+    year_over_year: "Age {age}: year-over-year change",
+    close_label: "Close",
+    net_worth_label: "Net worth",
+    whatif_add_change: "Add a change",
+    whatif_compare_to_baseline: "Compared to your baseline plan",
   },
   fr: {
     app_tagline: "Découvrez combien de temps durera votre argent",
@@ -136,6 +369,65 @@ const STRINGS = {
     wizard_next: "Suivant →",
     wizard_see_results: "Voir mes résultats →",
     wizard_back: "← Retour",
+    chart_header: "Solde par catégorie, par an",
+    toggle_future: "$ futurs",
+    toggle_today: "$ d'aujourd'hui",
+    chart_bold_today: "l'argent d'aujourd'hui",
+    chart_bold_future: "dollars futurs",
+    chart_note_real: "— l'inflation a été retirée de chaque année future, pour pouvoir comparer directement aux prix d'aujourd'hui. C'est généralement la vue la plus honnête pour savoir si vous progressez réellement.",
+    chart_note_nominal: "— les montants réels que vous verriez sur vos comptes chaque année, qui augmentent en partie à cause de l'inflation, pas seulement grâce à une croissance réelle. Passez à « $ d'aujourd'hui » pour retirer cet effet.",
+    chart_tap_hint: "Touchez un point du graphique pour voir ce qui a changé cette année-là.",
+    chart_debt_note: "La dette hypothécaire est affichée comme une bande rouge sous zéro, pas seulement déduite de la valeur nette d'un bien.",
+    chart_short_nominal: "Ce que vous verriez réellement sur votre compte chaque année.",
+    chart_short_real: "Ce que cela vaut aux prix d'aujourd'hui.",
+    details_label: "Détails",
+    mode_total: "Total",
+    time_until_freedom: "Temps avant la liberté",
+    mode_assets_debt: "Actifs vs dette",
+    mode_full: "Détail complet",
+    whatif_title: "Et si…",
+    whatif_intro: "Ajoutez autant de changements que vous voulez — chacun démarre avec votre valeur actuelle ; modifiez-la pour tester ce que vous voulez. Rien n'est enregistré ici.",
+    whatif_change_label: "Changement",
+    whatif_lump_out_of_range: "Cet âge est hors de votre période simulée ({min}\u2013{max}), cette somme ponctuelle est donc ignorée.",
+    whatif_mortgage_note: "Votre mensualité est calculée automatiquement à partir du taux et de la durée du prêt.",
+    whatif_spending_decline_note: "Les dépenses diminuent progressivement pendant la retraite plutôt que de rester stables — voir la page Infos pour les recherches derrière cela.",
+    whatif_market_rate_note: "Combine le taux de chaque investissement de marché/dividende et compte retraite, pondéré par le solde. Moyenne pondérée actuelle : {rate} %.",
+    whatif_bond_rate_note: "Combine le taux de chaque placement obligataire, pondéré par le solde — gardé séparé des actions car c'est une classe d'actifs au profil risque/rendement différent. Moyenne pondérée actuelle : {rate} %.",
+    whatif_cd_rate_note: "Le taux vers lequel chaque dépôt à terme converge une fois le blocage terminé, pondéré par le solde. Moyenne pondérée : {rate} %.",
+    wizard_note_region: "Nous avons deviné ceci à partir de votre appareil — touchez pour confirmer, ou choisissez-en un autre si nous nous sommes trompés.",
+    wizard_note_customRates: "Si vous préférez ne pas le faire, nous utiliserons des hypothèses volontairement prudentes pour votre région — pas la moyenne historique optimiste, mais plutôt une décennie autour du 25e centile (c'est-à-dire en supposant que les marchés fassent un peu moins bien que d'habitude). Votre taux d'imposition sera aussi calculé automatiquement à partir des tranches fiscales de votre pays et de vos revenus réels chaque année, plutôt qu'un chiffre fixe deviné.",
+    wizard_note_salary: "Le montant contractuel complet — avant l'impôt sur le revenu ET avant toute déduction obligatoire sur salaire (sécurité sociale, assurance maladie...). Nous calculons cela automatiquement selon votre lieu de résidence.",
+    wizard_note_taxBracket: "Nous n'avons pas encore de tranches fiscales exactes pour votre pays, donc cela ne s'ajustera pas automatiquement quand vos revenus changent chaque année comme pour les pays pris en charge — cela restera fixe à ce que vous saisissez. Modifiable à tout moment dans l'onglet Profil.",
+    get_started: "Commencer →",
+    skip_manual_entry: "Passer pour l'instant, je saisirai tout moi-même",
+    edit_label: "Modifier",
+    refresh_label: "Actualiser",
+    state_employer_pension: "Pension d'État / d'employeur",
+    have_one_button: "J'en ai une",
+    living_expenses_label: "Dépenses courantes",
+    cost_basis_note: "Seul le gain au-dessus du prix d'achat est imposé lors de la vente.",
+    celebration_dismiss: "Super !",
+    how_this_app_works: "Comment fonctionne cette appli",
+    shortfall_why: "Pourquoi {amount} était nécessaire — à {age} ans",
+    shortfall_rent_after_selling: "Loyer (après la vente)",
+    shortfall_salary: "− Salaire (net d'impôt)",
+    shortfall_pension: "− Pension (nette d'impôt)",
+    shortfall_rent_income: "− Loyer (net d'impôt)",
+    shortfall_dividends: "− Dividendes (nets d'impôt)",
+    shortfall_lump_received: "− Somme ponctuelle reçue",
+    shortfall_lump_paid: "+ Somme ponctuelle versée",
+    shortfall_total: "= Découvert à couvrir",
+    debt_mortgage_label: "Dette (prêt immobilier)",
+    debt_row_note: "Solde total des prêts immobiliers sur tous les biens — affiché en négatif puisque c'est dû, pas détenu.",
+    real_terms_breakdown_note: "Les soldes ci-dessus sont en argent d'aujourd'hui ; les lignes détaillées ci-dessous restent dans les montants réels de cette année-là (dollars futurs), car elles décrivent des opérations précises.",
+    at_life_expectancy: "À l'espérance de vie",
+    in_todays_money: "en argent d'aujourd'hui",
+    years_simulated: "Années simulées",
+    year_over_year: "Âge {age} : évolution sur l'année",
+    close_label: "Fermer",
+    net_worth_label: "Patrimoine net",
+    whatif_add_change: "Ajouter un changement",
+    whatif_compare_to_baseline: "Comparé à votre plan de référence",
   },
   it: {
     app_tagline: "Scopri quanto durano i tuoi risparmi",
@@ -193,6 +485,65 @@ const STRINGS = {
     wizard_next: "Avanti →",
     wizard_see_results: "Vedi i miei risultati →",
     wizard_back: "← Indietro",
+    chart_header: "Saldo per categoria, per anno",
+    toggle_future: "$ futuri",
+    toggle_today: "$ di oggi",
+    chart_bold_today: "il valore di oggi",
+    chart_bold_future: "dollari futuri",
+    chart_note_real: "— l'inflazione è stata rimossa da ogni anno futuro, così puoi confrontare direttamente con i prezzi di oggi. Di solito è la visione più onesta per capire se stai davvero migliorando.",
+    chart_note_nominal: "— gli importi reali che vedresti sui tuoi conti ogni anno, che crescono in parte per l'inflazione, non solo per crescita reale. Passa a \"$ di oggi\" per rimuovere questo effetto.",
+    chart_tap_hint: "Tocca un punto del grafico per vedere cosa è cambiato quell'anno.",
+    chart_debt_note: "Il debito ipotecario è mostrato come una banda rossa sotto zero, non solo sottratto dal patrimonio di un immobile.",
+    chart_short_nominal: "Quello che vedresti davvero sul tuo conto ogni anno.",
+    chart_short_real: "Quanto vale ai prezzi di oggi.",
+    details_label: "Dettagli",
+    mode_total: "Totale",
+    time_until_freedom: "Tempo all'indipendenza",
+    mode_assets_debt: "Attivi vs debito",
+    mode_full: "Dettaglio completo",
+    whatif_title: "E se…",
+    whatif_intro: "Aggiungi tutti i cambiamenti che vuoi — ognuno parte già impostato sul tuo valore attuale; modificalo per testare quello che vuoi. Niente qui viene salvato.",
+    whatif_change_label: "Cambiamento",
+    whatif_lump_out_of_range: "Questa età è fuori dal periodo simulato ({min}\u2013{max}), quindi questa somma una tantum viene ignorata.",
+    whatif_mortgage_note: "La rata mensile viene calcolata automaticamente dal tasso e dalla durata del prestito.",
+    whatif_spending_decline_note: "Le spese diminuiscono gradualmente durante la pensione invece di restare costanti — vedi la pagina Info per la ricerca alla base.",
+    whatif_market_rate_note: "Combina il tasso di ogni investimento di mercato/dividendo e conto pensionistico, ponderato per saldo. Media ponderata attuale: {rate}%.",
+    whatif_bond_rate_note: "Combina il tasso di ogni investimento obbligazionario, ponderato per saldo — tenuto separato dalle azioni perché è una classe di attivi con un profilo rischio/rendimento diverso. Media ponderata attuale: {rate}%.",
+    whatif_cd_rate_note: "Il tasso verso cui converge ogni deposito vincolato una volta terminato il blocco, ponderato per saldo. Media ponderata: {rate}%.",
+    wizard_note_region: "Lo abbiamo dedotto dal tuo dispositivo — tocca per confermare, o scegline un altro se abbiamo sbagliato.",
+    wizard_note_customRates: "Se preferisci di no, useremo ipotesi volutamente prudenti per la tua zona — non la media storica ottimistica, ma un decennio intorno al 25° percentile (cioè assumendo che i mercati vadano un po' peggio del solito). Anche la tua aliquota fiscale sarà calcolata automaticamente dagli scaglioni del tuo paese e dal tuo reddito reale ogni anno, invece di un numero fisso indovinato.",
+    wizard_note_salary: "L'importo contrattuale completo — prima delle imposte sul reddito E prima di qualsiasi trattenuta obbligatoria in busta paga (previdenza sociale, assicurazione sanitaria...). Li calcoliamo automaticamente in base a dove vivi.",
+    wizard_note_taxBracket: "Non abbiamo ancora scaglioni fiscali esatti per il tuo paese, quindi questo non si adatterà automaticamente quando il tuo reddito cambia ogni anno come per i paesi supportati — resterà fisso a quanto inserisci. Modificabile in qualsiasi momento nella scheda Profilo.",
+    get_started: "Inizia →",
+    skip_manual_entry: "Salta per ora, inserirò tutto io stesso",
+    edit_label: "Modifica",
+    refresh_label: "Aggiorna",
+    state_employer_pension: "Pensione statale / aziendale",
+    have_one_button: "Ne ho una",
+    living_expenses_label: "Spese correnti",
+    cost_basis_note: "Solo il guadagno sopra il prezzo di acquisto viene tassato alla vendita.",
+    celebration_dismiss: "Ottimo!",
+    how_this_app_works: "Come funziona questa app",
+    shortfall_why: "Perché servivano {amount} — età {age}",
+    shortfall_rent_after_selling: "Affitto (dopo la vendita)",
+    shortfall_salary: "− Stipendio (netto)",
+    shortfall_pension: "− Pensione (netta)",
+    shortfall_rent_income: "− Affitto (netto)",
+    shortfall_dividends: "− Dividendi (netti)",
+    shortfall_lump_received: "− Somma una tantum ricevuta",
+    shortfall_lump_paid: "+ Somma una tantum versata",
+    shortfall_total: "= Ammanco da coprire",
+    debt_mortgage_label: "Debito (mutuo)",
+    debt_row_note: "Saldo totale dei mutui su tutte le proprietà — mostrato negativo perché è dovuto, non posseduto.",
+    real_terms_breakdown_note: "I saldi sopra sono in valore odierno; le righe dettagliate sotto restano negli importi reali di quell'anno (dollari futuri), perché descrivono transazioni specifiche.",
+    at_life_expectancy: "All'aspettativa di vita",
+    in_todays_money: "in valore odierno",
+    years_simulated: "Anni simulati",
+    year_over_year: "Età {age}: variazione anno su anno",
+    close_label: "Chiudi",
+    net_worth_label: "Patrimonio netto",
+    whatif_add_change: "Aggiungi un cambiamento",
+    whatif_compare_to_baseline: "Confrontato con il tuo piano di base",
   },
 };
 // small parametrized phrases where naive concatenation would read wrong in French/Italian
@@ -211,10 +562,64 @@ function trFreeAt(language, n) {
   if (language === "it") return `libero a ${n} anni`;
   return `free at ${n}`;
 }
+// the Results-chart toggle needs the person's ACTUAL currency symbol, not a hardcoded
+// "$" — someone using EUR or GBP was seeing "Future $" / "Today's $" regardless of
+// what currency the rest of the app was already showing them
+function trMoneyToggle(language, symbol, which) {
+  if (language === "fr") return which === "future" ? `${symbol} futurs` : `${symbol} d'aujourd'hui`;
+  if (language === "it") return which === "future" ? `${symbol} futuri` : `${symbol} di oggi`;
+  return which === "future" ? `Future ${symbol}` : `Today's ${symbol}`;
+}
+// What-If comparison panel: "that scenario costs/buys you X of freedom"
+function trScenarioDelta(language, formattedDuration, costs) {
+  if (language === "fr") return costs ? `Ce scénario vous coûte ${formattedDuration} de liberté.` : `Ce scénario vous fait gagner ${formattedDuration} de liberté !`;
+  if (language === "it") return costs ? `Questo scenario ti costa ${formattedDuration} di libertà.` : `Questo scenario ti fa guadagnare ${formattedDuration} di libertà!`;
+  return costs ? `That scenario costs you ${formattedDuration} of freedom.` : `That scenario buys you ${formattedDuration} of freedom!`;
+}
+// "Your money lasts either way — but you'd end up with X more/less by age Y"
+function trMoneyEitherWay(language, amount, moreWord, age) {
+  if (language === "fr") return `Votre argent dure dans les deux cas — mais vous vous retrouveriez avec ${amount} ${moreWord} à ${age} ans.`;
+  if (language === "it") return `I tuoi soldi durano comunque — ma ti ritroveresti con ${amount} ${moreWord} a ${age} anni.`;
+  return `Your money lasts either way — but you'd end up with ${amount} ${moreWord} by age ${age}.`;
+}
+// the one-sentence, plain-language summary shown above the Results chart — the whole
+// point is to convert the chart into a single actionable/understandable takeaway rather
+// than making someone read a graph to know if their plan works
+function trPlanSummary(language, kind, params) {
+  if (kind === "runsOut") {
+    const { age, yearsShort, target } = params;
+    if (language === "fr")
+      return `Votre argent s'épuise à ${age} ans — ${yearsShort} an${yearsShort === 1 ? "" : "s"} avant votre objectif de ${target} ans.`;
+    if (language === "it")
+      return `I tuoi soldi finiscono a ${age} anni — ${yearsShort} ann${yearsShort === 1 ? "o" : "i"} prima del tuo obiettivo di ${target} anni.`;
+    return `Your money runs out at age ${age} — ${yearsShort} year${yearsShort === 1 ? "" : "s"} before your target of ${target}.`;
+  }
+  if (kind === "stopAt") {
+    const { stopAge, target } = params;
+    if (language === "fr") return `À ce rythme, vous pourriez arrêter de travailler à ${stopAge} ans et votre argent durerait jusqu'à ${target} ans.`;
+    if (language === "it") return `A questo ritmo, potresti smettere di lavorare a ${stopAge} anni e i tuoi soldi durerebbero fino a ${target} anni.`;
+    return `At this rate, you could stop working at ${stopAge} and your money would last to ${target}.`;
+  }
+  const { target } = params;
+  if (language === "fr") return `Votre argent dure tout au long de votre plan, jusqu'à ${target} ans.`;
+  if (language === "it") return `I tuoi soldi durano per tutto il tuo piano, fino a ${target} anni.`;
+  return `Your money lasts through your plan, to age ${target}.`;
+}
 function trRemaining(language, y, m, d) {
   if (language === "fr") return `${y} an${y === 1 ? "" : "s"} ${m} mois ${d} jour${d === 1 ? "" : "s"} restants !!`;
   if (language === "it") return `${y} ann${y === 1 ? "o" : "i"} ${m} mes${m === 1 ? "e" : "i"} ${d} giorn${d === 1 ? "o" : "i"} rimanenti!!`;
   return `${y} year${y === 1 ? "" : "s"} ${m} month${m === 1 ? "" : "s"} ${d} day${d === 1 ? "" : "s"} remaining!!`;
+}
+// turns a day-count delta into a short "2 years 3 months" style phrase, for the
+// "biggest lever" insight — deliberately coarser than trRemaining (drops days) since
+// this is an approximate what-if nudge, not a precise countdown
+function formatDurationShort(days) {
+  const y = Math.floor(days / 365.25);
+  const m = Math.round((days - y * 365.25) / 30.4375);
+  const parts = [];
+  if (y > 0) parts.push(`${y} year${y === 1 ? "" : "s"}`);
+  if (m > 0 && y < 5) parts.push(`${m} month${m === 1 ? "" : "s"}`);
+  return parts.length ? parts.join(" ") : "a few weeks";
 }
 // guesses a starting language from the same location signal used for region/tax-country,
 // purely as a starting point — folded directly into guessLocationDefaults below, always
@@ -548,6 +953,15 @@ function parseOrderEntry(entry) {
 }
 
 const REGIONS = ["US", "EU", "UK", "Canada", "Other"];
+// the region-appropriate default growth rate for a given investment type — used
+// whenever Type or Region changes, so the number shown always matches "what does this
+// asset class typically do in this region" rather than carrying over a stale rate from
+// whatever the investment used to be
+function defaultGrowthRateForType(rd, type) {
+  if (type === "cd") return rd.cdRate;
+  if (type === "bond") return rd.bondReturn;
+  return rd.marketReturn; // market, dividend
+}
 
 // Long-run regional averages used to pre-fill assumptions, so people who don't want to
 // think about rates still start from something defensible rather than a made-up number.
@@ -567,12 +981,45 @@ const REGIONS = ["US", "EU", "UK", "Canada", "Other"];
 // this number on the Cash tab; a note there flags the France case specifically since a
 // livret's rate is government-set and worth looking up rather than guessing.
 const REGION_DEFAULTS = {
-  US: { currency: "USD", inflation: 2.5, cashRate: 0, cdRate: 4.0, cdRateLongRun: 2.0, marketReturn: 7.0, historicalReturn: 10.0, index: "S&P 500", label: "United States" },
-  EU: { currency: "EUR", inflation: 2.1, cashRate: 0, cdRate: 2.5, cdRateLongRun: 1.6, marketReturn: 4.0, historicalReturn: 7.0, index: "Euro Stoxx 50", label: "Eurozone" },
-  UK: { currency: "GBP", inflation: 2.5, cashRate: 0, cdRate: 4.0, cdRateLongRun: 2.0, marketReturn: 3.5, historicalReturn: 6.5, index: "FTSE 100", label: "United Kingdom" },
-  Canada: { currency: "CAD", inflation: 2.0, cashRate: 0, cdRate: 3.5, cdRateLongRun: 1.5, marketReturn: 5.0, historicalReturn: 8.0, index: "S&P/TSX", label: "Canada" },
-  Other: { currency: "USD", inflation: 2.5, cashRate: 0, cdRate: 2.5, cdRateLongRun: 1.6, marketReturn: 4.0, historicalReturn: 7.0, index: "global equities", label: "Somewhere else" },
+  US: {
+    currency: "USD", inflation: 2.5, cashRate: 0, cdRate: 4.0, cdRateLongRun: 2.0,
+    marketReturn: 7.0, historicalReturn: 10.0, index: "S&P 500",
+    bondReturn: 3.5, bondHistoricalReturn: 5.0, bondIndex: "Bloomberg US Aggregate Bond Index",
+    label: "United States",
+  },
+  EU: {
+    currency: "EUR", inflation: 2.1, cashRate: 0, cdRate: 2.5, cdRateLongRun: 1.6,
+    marketReturn: 4.0, historicalReturn: 7.0, index: "Euro Stoxx 50",
+    bondReturn: 2.5, bondHistoricalReturn: 4.0, bondIndex: "Bloomberg Euro Aggregate Bond Index",
+    label: "Eurozone",
+  },
+  UK: {
+    currency: "GBP", inflation: 2.5, cashRate: 0, cdRate: 4.0, cdRateLongRun: 2.0,
+    marketReturn: 3.5, historicalReturn: 6.5, index: "FTSE 100",
+    bondReturn: 3.5, bondHistoricalReturn: 5.0, bondIndex: "Bloomberg Sterling Aggregate Bond Index",
+    label: "United Kingdom",
+  },
+  Canada: {
+    currency: "CAD", inflation: 2.0, cashRate: 0, cdRate: 3.5, cdRateLongRun: 1.5,
+    marketReturn: 5.0, historicalReturn: 8.0, index: "S&P/TSX",
+    bondReturn: 4.0, bondHistoricalReturn: 5.5, bondIndex: "FTSE Canada Universe Bond Index",
+    label: "Canada",
+  },
+  Other: {
+    currency: "USD", inflation: 2.5, cashRate: 0, cdRate: 2.5, cdRateLongRun: 1.6,
+    marketReturn: 4.0, historicalReturn: 7.0, index: "global equities",
+    bondReturn: 3.0, bondHistoricalReturn: 4.5, bondIndex: "global aggregate bonds",
+    label: "Somewhere else",
+  },
 };
+// Bond defaults follow the exact same "cautious decade, not the rosy average" philosophy
+// as equities above — one blended government + investment-grade corporate bond index per
+// region, haircut from its historical average. The haircut is smaller than equities'
+// (~1.5pt vs ~3pt) because bonds are meaningfully less volatile, so a "somewhat
+// disappointing decade" isn't as far below the long-run mean. High-yield corporate bonds
+// specifically are NOT modeled separately — they sit somewhere between this and equities
+// in risk/return, so someone holding them is better served picking a rate between the two
+// defaults (or their own number) than by us inventing a third, thinly-supported index.
 
 // ---------------------------------------------------------------------------------
 // Progressive tax-bracket tables, used to compute an "average" (effective) tax rate
@@ -631,17 +1078,22 @@ const REGION_DEFAULTS = {
 // genuinely tax differently from ordinary income.
 const TAX_TABLES = {
   FR: {
-    label: "France — barème progressif + ~9pt CSG/CRDS add-on (single, 2025)",
-    // official 2025 barème is 0/11/30/41/45; France also levies mandatory CSG/CRDS
-    // social contributions on income that aren't captured by the income-tax barème
-    // alone, approximated here as a flat add-on rather than modeled exactly
+    label: "France — barème progressif (single, 2025)",
     ordinary: [
-      { upTo: 11497, rate: 9 },
-      { upTo: 29315, rate: 20 },
-      { upTo: 83823, rate: 39 },
-      { upTo: 180294, rate: 50 },
-      { upTo: Infinity, rate: 54 },
+      { upTo: 11497, rate: 0 },
+      { upTo: 29315, rate: 11 },
+      { upTo: 83823, rate: 30 },
+      { upTo: 180294, rate: 41 },
+      { upTo: Infinity, rate: 45 },
     ],
+    // mandatory employee "cotisations salariales" (pension, unemployment, health,
+    // CSG/CRDS) — this is what turns "salaire brut" into take-home pay, BEFORE income
+    // tax is even applied. Only levied on salary, never on a pension, rental income, or
+    // interest — so it's kept separate from the "ordinary" bracket above rather than
+    // folded into it, or a retiree's pension would get taxed as if it were still salary.
+    // ~23% is a representative single, non-cadre figure; real French payroll deductions
+    // are somewhat banded and vary by sector, so this is a round approximation.
+    salaryOnlyAddOn: 23,
     // Prélèvement Forfaitaire Unique (PFU / "flat tax"): 12.8% income tax + 17.2%
     // social contributions = 30% flat on dividends AND interest, regardless of
     // income level (an income-tax-barème option also exists but PFU is the default
@@ -659,6 +1111,9 @@ const TAX_TABLES = {
       { upTo: 277825, rate: 42 },
       { upTo: Infinity, rate: 45 },
     ],
+    // mandatory Sozialversicherung (pension ~9.3%, unemployment ~1.3%, health ~8.05%,
+    // long-term care ~1.8-2.3%) — salary only, same reasoning as France above
+    salaryOnlyAddOn: 20,
     // flat "Abgeltungsteuer" (25%) + solidarity surcharge (5.5% of the tax) = 26.375%,
     // applied to interest and dividends alike regardless of income level
     dividend: [{ upTo: Infinity, rate: 26.375 }],
@@ -671,6 +1126,8 @@ const TAX_TABLES = {
       { upTo: 50000, rate: 35 },
       { upTo: Infinity, rate: 43 },
     ],
+    // mandatory INPS employee contribution — salary only
+    salaryOnlyAddOn: 9,
     // standard flat "imposta sostitutiva" on most financial income (government
     // bonds get a preferential 12.5%, ignored here as the less common case)
     dividend: [{ upTo: Infinity, rate: 26 }],
@@ -686,6 +1143,8 @@ const TAX_TABLES = {
       { upTo: 300000, rate: 45 },
       { upTo: Infinity, rate: 47 },
     ],
+    // mandatory Seguridad Social employee contribution — salary only
+    salaryOnlyAddOn: 6,
     // "base del ahorro" — Spain's separate savings-income scale for dividends/interest
     dividend: [
       { upTo: 6000, rate: 19 },
@@ -696,16 +1155,26 @@ const TAX_TABLES = {
     ],
   },
   UK: {
-    label: "UK income tax + employee National Insurance (single, 2025/26)",
-    // income tax + NI blended, used for ordinary income (salary/pension/rent/interest)
+    label: "UK income tax (single, 2025/26) + employee National Insurance",
+    // pure income tax bands — NOT blended with National Insurance here, since NI only
+    // applies to salary, never to a pension, rent, or interest (a retiree living off a
+    // pension doesn't pay NI on it at all)
     ordinary: [
       { upTo: 12570, rate: 0 },
-      { upTo: 50270, rate: 28 },
-      { upTo: 125140, rate: 42 },
-      { upTo: Infinity, rate: 47 },
+      { upTo: 50270, rate: 20 },
+      { upTo: 125140, rate: 40 },
+      { upTo: Infinity, rate: 45 },
     ],
-    // pure income-tax bands (NI doesn't apply to dividends) — used only to work out
-    // which dividend band someone's income falls into
+    // National Insurance is properly banded (0% / 8% / 2%), so — unlike the flat
+    // add-ons used for other countries — this is its own small bracket table, applied
+    // only to salary
+    salaryOnlyAddOn: [
+      { upTo: 12570, rate: 0 },
+      { upTo: 50270, rate: 8 },
+      { upTo: Infinity, rate: 2 },
+    ],
+    // pure income-tax bands (identical to "ordinary" above, NI never applies to
+    // dividends) — used only to work out which dividend band someone's income falls into
     incomeTaxBandsOnly: [
       { upTo: 12570, rate: 0 },
       { upTo: 50270, rate: 20 },
@@ -730,6 +1199,10 @@ const TAX_TABLES = {
       { upTo: 1077550, rate: 48 },
       { upTo: Infinity, rate: 51 },
     ],
+    // FICA (Social Security 6.2% + Medicare 1.45%) — salary only; the Social Security
+    // portion actually caps at a wage threshold, ignored here for simplicity, so this
+    // slightly overstates the add-on for very high earners
+    salaryOnlyAddOn: 7.65,
     // federal LTCG/qualified-dividend rate (0/15/20%) stacked with NY State + NYC,
     // which — unlike federal — tax dividends as ordinary income with no discount
     dividend: [
@@ -751,6 +1224,8 @@ const TAX_TABLES = {
       { upTo: 626350, rate: 40 },
       { upTo: Infinity, rate: 42 },
     ],
+    // FICA — salary only, see the note on US_NY above
+    salaryOnlyAddOn: 7.65,
     // federal long-term capital gains / qualified dividend brackets (0/15/20%), plus the
     // same ~5pt state add-on used above
     dividend: [
@@ -769,6 +1244,9 @@ const TAX_TABLES = {
       { upTo: 253414, rate: 42 },
       { upTo: Infinity, rate: 46 },
     ],
+    // CPP (~5.95%) + EI (~1.64%) — salary only; both actually cap at a wage threshold,
+    // ignored here for simplicity, same trade-off as the US FICA add-on above
+    salaryOnlyAddOn: 7.6,
     // Canada's dividend tax credit meaningfully lowers the effective rate on eligible
     // dividends relative to ordinary income — approximated here, not exact
     dividend: [
@@ -842,6 +1320,20 @@ function effectiveRateFromBrackets(income, brackets) {
 function computeOrdinaryTaxRate(taxCountry, income) {
   const table = TAX_TABLES[taxCountry] || TAX_TABLES.GENERIC_OTHER;
   return effectiveRateFromBrackets(income, table.ordinary);
+}
+
+// mandatory employee social-insurance contributions (NI, cotisations sociales,
+// Sozialversicherung, FICA, CPP/EI...) — computed from SALARY ALONE, not blended with
+// pension/rent/interest, since none of these systems tax a pension or rental income the
+// way they tax a paycheck. Handles both a flat percentage (most countries, since a
+// single round number is a reasonable approximation) and a proper bracket table (the
+// UK, where National Insurance really is banded at 0/8/2%).
+function computeSalaryAddOnRate(taxCountry, grossSalary) {
+  const table = TAX_TABLES[taxCountry] || TAX_TABLES.GENERIC_OTHER;
+  const addOn = table.salaryOnlyAddOn;
+  if (!addOn) return 0;
+  if (Array.isArray(addOn)) return effectiveRateFromBrackets(grossSalary, addOn);
+  return addOn;
 }
 
 function computeDividendTaxRate(taxCountry, ordinaryIncome) {
@@ -1097,12 +1589,31 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
     // because e.g. a CD's gross interest is one of the inputs to the rate, not an
     // output of it. Dividends are handled separately below with their own rate.
     let grossRentTotal = 0;
+    let taxableRentTotal = 0;
     const houseGrossRentById = {};
+    const houseTaxableRentById = {};
     invBal.forEach((inv) => {
       if (inv.type === "house" && inv.usage === "rental") {
         const grossRent = (inv.currentRent || 0) * 12;
         houseGrossRentById[inv.id] = grossRent;
         grossRentTotal += grossRent;
+        // Most countries let a landlord deduct mortgage INTEREST (not principal) from
+        // rental income before tax — but the rules vary enough by country and rental
+        // structure that this is opt-in per property rather than assumed. Off by default,
+        // so nobody silently gets a tax break they don't actually qualify for.
+        let deductibleInterest = 0;
+        if (inv.mortgageInterestDeductible && (inv.mortgageBalance || 0) > 0.01) {
+          const row = scheduleYearRow(mortgageSchedules[inv.id], inv.mortgageScheduleYear || 0);
+          if (row) {
+            deductibleInterest = row.interestPaid;
+          } else {
+            const rate = inv.mortgageRateType === "floating" ? cash.rate : inv.mortgageRate || 0;
+            deductibleInterest = (inv.mortgageBalance || 0) * (rate / 100);
+          }
+        }
+        const taxableRent = Math.max(0, grossRent - deductibleInterest);
+        houseTaxableRentById[inv.id] = taxableRent;
+        taxableRentTotal += taxableRent;
       }
     });
     const cashStart = cashBal;
@@ -1126,7 +1637,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
       cdGrossRateById[inv.id] = cdGrossRate;
       cdGrossInterestTotal += inv.amount * (cdGrossRate / 100);
     });
-    const totalOrdinaryGrossIncome = grossSalary + pensionGross + grossRentTotal + cashInterestGross + cdGrossInterestTotal;
+    const totalOrdinaryGrossIncome = grossSalary + pensionGross + taxableRentTotal + cashInterestGross + cdGrossInterestTotal;
 
     // Either the progressive rate implied by this region's bracket table at this year's
     // actual income (the default, "auto" mode — so it naturally drops once retired and
@@ -1156,7 +1667,12 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
         ? profile.capitalGainsTaxRate ?? profile.taxBracket ?? 24
         : computeCapitalGainsTaxRate(taxCountry, totalOrdinaryGrossIncome);
 
-    const netSalary = grossSalary * (1 - taxRateThisYear / 100);
+    // mandatory employee social-insurance contributions (NI, cotisations sociales,
+    // Sozialversicherung, FICA...) — only in "auto" mode, since a manual flat rate is
+    // assumed to already represent someone's real total deduction. Salary-only: a
+    // pension, rent, or interest never has this taken out of it.
+    const salaryAddOnRateThisYear = taxMode === "manual" ? 0 : computeSalaryAddOnRate(taxCountry, grossSalary);
+    const netSalary = grossSalary * (1 - (taxRateThisYear + salaryAddOnRateThisYear) / 100);
     const netPension = pensionGross * (1 - taxRateThisYear / 100);
 
     let extraIncome = 0;
@@ -1173,7 +1689,8 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
         let netRentIncome = 0;
         if (inv.usage === "rental") {
           const grossRent = houseGrossRentById[inv.id] || 0;
-          netRentIncome = grossRent * (1 - taxRateThisYear / 100);
+          const taxableRent = houseTaxableRentById[inv.id] ?? grossRent;
+          netRentIncome = grossRent - taxableRent * (taxRateThisYear / 100);
           extraIncome += netRentIncome - annualPayment;
           totalRentIncome += netRentIncome;
         } else {
@@ -1259,6 +1776,77 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
 
     const netCashFlow = netSalary + netPension + extraIncome + lumpSumThisYear - annualExpenses;
 
+    // ---- second tax pass: withdrawals are income too ----
+    // The rates above were derived from salary/pension/rent/interest only. But a pretax
+    // retirement withdrawal IS ordinary income, and a realized capital gain IS income for
+    // the purpose of picking a gains band — and both were missing from that base. Without
+    // this, a retiree living entirely off a pretax account looks like they have ~zero
+    // income and pays ~zero tax on money that should land them in a real bracket.
+    //
+    // It's genuinely circular (the rate sets the withdrawal, the withdrawal sets the rate),
+    // so this resolves it with one read-only measurement pass: walk the withdrawal order
+    // using the provisional rates, tally what would be pulled from taxable sources, then
+    // recompute the rates with that included. The refined rates are used for the
+    // WITHDRAWAL decisions below; salary/pension/interest keep the base rate they were
+    // already taxed at above. That residual inconsistency is deliberate and small — in the
+    // years where withdrawals dominate, earned income is usually zero anyway.
+    let withdrawalOrdinaryRate = taxRateThisYear;
+    let withdrawalGainsRate = capitalGainsRateThisYear;
+    if (netCashFlow < 0 && (taxMode === "auto" || capitalGainsTaxMode === "auto")) {
+      let remaining = -netCashFlow;
+      let estPretaxIncome = 0;
+      let estRealizedGains = 0;
+      for (const entry of withdrawalOrder) {
+        if (remaining <= 0) break;
+        const { type, id } = parseOrderEntry(entry);
+        if (type === "cash") {
+          const floor = savingsRule?.minCash || 0;
+          remaining -= Math.min(Math.max(0, cashBal - floor), remaining);
+        } else if (type === "investment") {
+          const inv = invBal.find((i) => i.id === id && i.type !== "house");
+          if (!inv || inv.amount <= 0) continue;
+          const cb = inv.costBasis ?? inv.amount;
+          const gf = inv.amount > 0 ? Math.max(0, (inv.amount - cb) / inv.amount) : 0;
+          const tr = Math.min(gf * (capitalGainsRateThisYear / 100), 0.95);
+          const take = Math.min(inv.amount, remaining / (1 - tr));
+          estRealizedGains += take * gf;
+          remaining -= take * (1 - tr);
+        } else if (type === "retirement") {
+          const r = retBal.find((x) => x.id === id);
+          if (!r) continue;
+          const belowMinAge = age < (r.minAge || 0);
+          if (belowMinAge && !r.earlyAccessAllowed) continue;
+          const penaltyRate = belowMinAge && r.earlyAccessAllowed ? (r.earlyPenalty || 0) / 100 : 0;
+          const isPretax = r.taxTreatment === "pretax";
+          const totalRate = Math.min((isPretax ? taxRateThisYear / 100 : 0) + penaltyRate, 0.95);
+          const take = Math.min(r.amount, remaining / (1 - totalRate));
+          if (isPretax) estPretaxIncome += take;
+          remaining -= take * (1 - totalRate);
+        } else if (type === "house") {
+          const inv = invBal.find((i) => i.id === id);
+          if (!inv || inv.sellable === false || inv._sold || inv.type !== "house") continue;
+          const equity = Math.max(0, inv.amount - (inv.mortgageBalance || 0));
+          if (equity <= 0) continue;
+          const gain = Math.max(0, inv.amount - (inv.purchasePrice ?? inv.amount));
+          const exempt = computeExemptPrimaryResidenceGain({
+            taxCountry,
+            isPrimary: inv.usage !== "rental",
+            capitalGain: gain,
+            saleValue: inv.amount,
+            postSaleAction: inv.postSaleAction,
+            rebuyValue: inv.rebuyValue,
+          });
+          estRealizedGains += Math.max(0, gain - exempt);
+          remaining -= equity;
+        }
+      }
+      const refinedOrdinaryBase = totalOrdinaryGrossIncome + estPretaxIncome;
+      if (taxMode === "auto") withdrawalOrdinaryRate = computeOrdinaryTaxRate(taxCountry, refinedOrdinaryBase);
+      if (capitalGainsTaxMode === "auto") {
+        withdrawalGainsRate = computeCapitalGainsTaxRate(taxCountry, refinedOrdinaryBase + estRealizedGains);
+      }
+    }
+
     let cashWithdrawn = 0;
     let defaultedThisYear = false;
     let hitCashFloor = false;
@@ -1327,7 +1915,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
           if (!inv || inv.amount <= 0) continue;
           const costBasis = inv.costBasis ?? inv.amount;
           const gainFraction = inv.amount > 0 ? Math.max(0, (inv.amount - costBasis) / inv.amount) : 0;
-          const taxRate = Math.min(gainFraction * (capitalGainsRateThisYear / 100), 0.95);
+          const taxRate = Math.min(gainFraction * (withdrawalGainsRate / 100), 0.95);
           const grossNeeded = shortfall / (1 - taxRate);
           const take = Math.min(inv.amount, grossNeeded);
           const net = take * (1 - taxRate);
@@ -1346,7 +1934,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
           const belowMinAge = age < minAge;
           if (belowMinAge && !r.earlyAccessAllowed) continue;
           const penaltyRate = belowMinAge && r.earlyAccessAllowed ? (r.earlyPenalty || 0) / 100 : 0;
-          const taxRate = r.taxTreatment === "pretax" ? taxRateThisYear / 100 : 0;
+          const taxRate = r.taxTreatment === "pretax" ? withdrawalOrdinaryRate / 100 : 0;
           const totalRate = Math.min(taxRate + penaltyRate, 0.95);
           const grossNeeded = shortfall / (1 - totalRate);
           const take = Math.min(r.amount, grossNeeded);
@@ -1363,7 +1951,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
             if (rawInv.amount <= 0) continue;
             const cb = rawInv.costBasis ?? rawInv.amount;
             const gf = rawInv.amount > 0 ? Math.max(0, (rawInv.amount - cb) / rawInv.amount) : 0;
-            const tr = Math.min(gf * (capitalGainsRateThisYear / 100), 0.95);
+            const tr = Math.min(gf * (withdrawalGainsRate / 100), 0.95);
             const grossNeeded = shortfall / (1 - tr);
             const take = Math.min(rawInv.amount, grossNeeded);
             const net = take * (1 - tr);
@@ -1420,7 +2008,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
             rebuyValue: inv.rebuyValue,
           });
           const taxableGain = Math.max(0, capitalGain - exemptGain);
-          const gainTax = taxableGain * (capitalGainsRateThisYear / 100);
+          const gainTax = taxableGain * (withdrawalGainsRate / 100);
           const netProceeds = Math.max(0, equity - gainTax - sellingFee);
           let cashFromSale = netProceeds;
           let saleNote = { sellingFee, capitalGain, exemptGain, taxableGain, gainTax };
@@ -1502,7 +2090,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
           rebuyValue: 0,
         });
         const taxableGain = Math.max(0, capitalGain - exemptGain);
-        const gainTax = taxableGain * (capitalGainsRateThisYear / 100);
+        const gainTax = taxableGain * (withdrawalGainsRate / 100);
         const grossEquity = Math.max(0, saleValue - (mortgaged.mortgageBalance || 0));
         const proceeds = Math.max(0, grossEquity - gainTax - sellingFee);
         mortgaged._sold = true;
@@ -1581,7 +2169,13 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
 
     const record = { age, year: new Date().getFullYear() + yearIndex, Cash: Math.max(cashBal, 0) };
     invBal.forEach((inv) => {
-      record[inv.displayName] = Math.max(equityOf(inv), 0);
+      // Houses are shown at GROSS value here, not equity — their mortgage is entirely
+      // captured by the separate aggregate Debt band below. Subtracting it again here
+      // would double-count it the moment the two bands are added together, which is
+      // exactly the bug a "gross assets, minus a debt band" chart is meant to avoid:
+      // a €500k house with a €200k mortgage used to show a €300k equity band AND a
+      // −€200k Debt band, summing to €100k instead of the true €300k net worth.
+      record[inv.displayName] = inv.type === "house" ? Math.max(inv.amount, 0) : Math.max(equityOf(inv), 0);
     });
     retBal.forEach((r) => (record[r.displayName] = Math.max(r.amount, 0)));
     // total outstanding mortgage debt across all properties, shown as its own NEGATIVE
@@ -1595,10 +2189,13 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
       invBal.reduce((s, i) => s + Math.max(i.amount, 0), 0) +
       retBal.reduce((s, r) => s + Math.max(r.amount, 0), 0);
     record._totalDebt = totalMortgageDebt;
-    record._total =
-      Math.max(cashBal, 0) +
-      invBal.reduce((s, i) => s + Math.max(equityOf(i), 0), 0) +
-      retBal.reduce((s, r) => s + Math.max(r.amount, 0), 0);
+    // Net worth = gross assets MINUS all mortgage debt. Deliberately NOT the sum of the
+    // clamped per-bucket equity values used for the chart bands above: those floor at zero
+    // so a stacked area chart can render them, which silently hid negative equity and
+    // overstated net worth whenever a property was underwater. Defining it once here off
+    // gross assets and gross debt also makes it reconcile exactly with what the chart
+    // draws (positive bands, minus the red Debt band).
+    record._total = record._grossAssets - totalMortgageDebt;
     record._explain = explain;
     record._defaulted = defaultedThisYear;
     record._lumpSumEvents = lumpSumEvents;
@@ -1696,12 +2293,12 @@ const weightedAvgGrowth = (d) => {
 };
 
 // weighted average of market/dividend investment rates + retirement accounts — excludes
-// cash and CDs, which get their own separate What-If levers
+// cash, CDs, and bonds, which each get their own separate What-If levers
 const weightedAvgMarketRate = (d) => {
   let totalW = 0;
   let weightedSum = 0;
   d.investments
-    .filter((i) => i.type !== "house" && i.type !== "cd")
+    .filter((i) => i.type !== "house" && i.type !== "cd" && i.type !== "bond")
     .forEach((i) => {
       totalW += i.amount;
       weightedSum += i.amount * i.growthRate;
@@ -1710,6 +2307,21 @@ const weightedAvgMarketRate = (d) => {
     totalW += r.amount;
     weightedSum += r.amount * r.growthRate;
   });
+  return totalW > 0 ? weightedSum / totalW : 0;
+};
+
+// weighted average of bond/fixed-income investment rates — kept separate from equities
+// above since they're a genuinely different risk/return asset class, not just another
+// flavor of "market"
+const weightedAvgBondRate = (d) => {
+  let totalW = 0;
+  let weightedSum = 0;
+  d.investments
+    .filter((i) => i.type === "bond")
+    .forEach((i) => {
+      totalW += i.amount;
+      weightedSum += i.amount * i.growthRate;
+    });
   return totalW > 0 ? weightedSum / totalW : 0;
 };
 
@@ -1727,6 +2339,13 @@ const weightedAvgCDLongRun = (d) => {
   return totalW > 0 ? weightedSum / totalW : 0;
 };
 
+// used only to pre-fill a tax lever's starting slider position — a rough proxy for
+// "this year's taxable income" without running a full simulation. Salary alone
+// understates this badly for a retiree (zero salary, but living off withdrawals that
+// the real engine correctly taxes at a real bracket — see the two-pass estimate in
+// the simulation itself) — using at least what they spend annually as a floor gets
+// the displayed starting number much closer to what the engine will actually apply.
+const taxLeverIncomeProxy = (d) => Math.max(d.work.salary || 0, (d.expensesState?.monthly || 0) * 12);
 const LEVERS = [
   {
     id: "spend",
@@ -1758,8 +2377,23 @@ const LEVERS = [
       const delta = v - weightedAvgMarketRate(d);
       return {
         ...d,
-        investments: d.investments.map((i) => (i.type !== "house" && i.type !== "cd" ? { ...i, growthRate: i.growthRate + delta } : i)),
+        investments: d.investments.map((i) =>
+          i.type !== "house" && i.type !== "cd" && i.type !== "bond" ? { ...i, growthRate: i.growthRate + delta } : i
+        ),
         retirement: d.retirement.map((r) => ({ ...r, growthRate: r.growthRate + delta })),
+      };
+    },
+  },
+  {
+    id: "bondRate",
+    label: "Bond / fixed-income rate",
+    unit: () => "%/yr",
+    getCurrent: weightedAvgBondRate,
+    apply: (d, v) => {
+      const delta = v - weightedAvgBondRate(d);
+      return {
+        ...d,
+        investments: d.investments.map((i) => (i.type === "bond" ? { ...i, growthRate: i.growthRate + delta } : i)),
       };
     },
   },
@@ -1794,7 +2428,7 @@ const LEVERS = [
     getCurrent: (d) =>
       (d.profile.taxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(d.profile))
         ? d.profile.taxBracket ?? 24
-        : computeOrdinaryTaxRate(resolveTaxCountry(d.profile), d.work.salary),
+        : computeOrdinaryTaxRate(resolveTaxCountry(d.profile), taxLeverIncomeProxy(d)),
     // dragging this lever always pins a manual override for the scenario — that's the point
     // of a What-If, even if the baseline profile is on "auto"
     apply: (d, v) => ({ ...d, profile: { ...d.profile, taxMode: "manual", taxBracket: Math.max(0, v) } }),
@@ -1806,7 +2440,7 @@ const LEVERS = [
     getCurrent: (d) =>
       (d.profile.dividendTaxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(d.profile))
         ? d.profile.dividendTaxRate ?? d.profile.taxBracket ?? 24
-        : computeDividendTaxRate(resolveTaxCountry(d.profile), d.work.salary),
+        : computeDividendTaxRate(resolveTaxCountry(d.profile), taxLeverIncomeProxy(d)),
     apply: (d, v) => ({ ...d, profile: { ...d.profile, dividendTaxMode: "manual", dividendTaxRate: Math.max(0, v) } }),
   },
   {
@@ -1816,7 +2450,7 @@ const LEVERS = [
     getCurrent: (d) =>
       (d.profile.capitalGainsTaxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(d.profile))
         ? d.profile.capitalGainsTaxRate ?? d.profile.taxBracket ?? 24
-        : computeCapitalGainsTaxRate(resolveTaxCountry(d.profile), d.work.salary),
+        : computeCapitalGainsTaxRate(resolveTaxCountry(d.profile), taxLeverIncomeProxy(d)),
     apply: (d, v) => ({ ...d, profile: { ...d.profile, capitalGainsTaxMode: "manual", capitalGainsTaxRate: Math.max(0, v) } }),
   },
   {
@@ -1835,7 +2469,7 @@ const LEVERS = [
   },
   {
     id: "extraSavings",
-    label: "Extra monthly savings (épargne)",
+    label: "Extra monthly savings",
     unit: (c) => `${c}/mo`,
     getCurrent: () => 0,
     apply: (d, v) => ({ ...d, expensesState: { ...d.expensesState, monthly: Math.max(0, d.expensesState.monthly - (v || 0)) } }),
@@ -1863,6 +2497,30 @@ function Warn({ children }) {
       <span>⚠️</span>
       <span>{children}</span>
     </p>
+  );
+}
+// a small, self-contained "show the exact math" disclosure, usable right where a
+// number might be confusing — rather than only in the separate Info destination,
+// which nobody finds mid-confusion. Collapsed by default; tapping it reveals the same
+// monospace formula style used on the full Info page, just scoped to one specific
+// calculation instead of the whole app.
+function InlineMath({ label, math }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="-mt-1 mb-3">
+      <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-1 text-[11px] font-medium" style={{ color: "#7C5CFC" }}>
+        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        {label || "Show the exact math"}
+      </button>
+      {open && (
+        <pre
+          className="text-[10px] leading-relaxed rounded-lg p-2.5 mt-1.5 overflow-x-auto"
+          style={{ background: "#231D3B", color: "#E9E4F7", fontFamily: "monospace", whiteSpace: "pre-wrap" }}
+        >
+          {math}
+        </pre>
+      )}
+    </div>
   );
 }
 const inputCls =
@@ -1953,9 +2611,13 @@ function SummaryStat({ label, value, color }) {
     </div>
   );
 }
-function StackedChartTooltip({ active, payload, label, currency }) {
+function StackedChartTooltip({ active, payload, label, currency, netWorthLabel }) {
   if (!active || !payload || !payload.length) return null;
-  const total = payload.reduce((s, p) => s + (p.value || 0), 0);
+  // NOT a sum of the displayed bands — in "full" mode each account band is EQUITY
+  // (value minus its own mortgage) while Debt is the GROSS mortgage total, so summing
+  // the two double-counts debt. The payload's own data row already carries the correct
+  // net worth (_total = gross assets − total debt), computed once in the simulation.
+  const total = payload[0]?.payload?._total ?? payload.reduce((s, p) => s + (p.value || 0), 0);
   return (
     <div className="rounded-lg bg-white shadow-lg border border-stone-100 px-3 py-2 text-xs min-w-[160px]">
       <div className="font-semibold text-stone-500 mb-1.5">Age {label}</div>
@@ -1969,7 +2631,7 @@ function StackedChartTooltip({ active, payload, label, currency }) {
         </div>
       ))}
       <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-stone-100 font-semibold">
-        <span>Net worth</span>
+        <span>{netWorthLabel || "Net worth"}</span>
         <span>{fmt(total, currency)}</span>
       </div>
     </div>
@@ -2114,13 +2776,19 @@ function getWizardSteps(a) {
       question: "Do you want to set your own growth, inflation, and tax rates?",
       note: "If you'd rather not, we'll use deliberately cautious defaults for where you live — not the rosy historical average, but roughly a 25th-percentile decade (i.e. assuming markets do somewhat worse than usual). Your tax rate will also be worked out automatically from your country's tax brackets and your actual income each year, instead of one flat guessed number.",
     },
-    { id: "salary", type: "number", question: "What's your annual salary, before tax?", suffix: `${salaryCcySymbol} / year` }
+    {
+      id: "salary",
+      type: "number",
+      question: "What's your annual salary, before tax?",
+      suffix: `${salaryCcySymbol} / year`,
+      note: "The full contractual amount — before income tax AND before any mandatory payroll deductions (social security, health insurance...) come out. We work those out automatically for where you live.",
+    }
   );
   if (a.customRates) {
     steps.push({ id: "salaryGrowth", type: "number", question: "How much do you expect your salary to grow, per year?", suffix: "%/yr" });
   }
   steps.push({ id: "yearsWorking", type: "number", question: "How many more years do you plan to work?", suffix: "years" });
-  steps.push({ id: "monthlyExpenses", type: "number", question: "What do you spend per month — not including any mortgage?", suffix: `${mainCcySymbol} / month` });
+  steps.push({ id: "monthlyExpenses", type: "number", question: "How much do you spend per month — not including any mortgage?", suffix: `${mainCcySymbol} / month` });
   const taxCountryUnsupported = a.region === "EU" && a.taxCountry === UNSUPPORTED_TAX_COUNTRY;
   if (a.customRates) {
     steps.push({ id: "inflation", type: "number", question: "What inflation rate should we assume?", suffix: "%/yr" });
@@ -2167,7 +2835,7 @@ function getWizardSteps(a) {
 const WIZARD_DEFAULTS = {
   region: "EU",
   taxCountry: null,
-  currentAge: 30,
+  currentAge: 40,
   multiCurrency: null,
   customRates: null,
   salary: 60000,
@@ -2190,6 +2858,7 @@ const WIZARD_DEFAULTS = {
       name: "Primary home",
       usage: "primary",
       value: 300000,
+      hasMortgage: true,
       mortgageBalance: 150000,
       mortgagePayment: 1200,
       mortgageInputMode: "rate",
@@ -2232,15 +2901,16 @@ function detectWizardDefaults() {
     cashRate: rd.cashRate,
     cashCurrency: rd.currency,
     salaryCurrency: rd.currency,
-    investmentsList: WIZARD_DEFAULTS.investmentsList.map((i) => ({ ...i, currency: rd.currency })),
+    investmentsList: WIZARD_DEFAULTS.investmentsList.map((i) => ({ ...i, currency: rd.currency, growthRate: rd.marketReturn })),
     housesList: WIZARD_DEFAULTS.housesList.map((h) => ({ ...h, currency: rd.currency })),
-    retirementList: WIZARD_DEFAULTS.retirementList.map((x) => ({ ...x, currency: rd.currency })),
+    retirementList: WIZARD_DEFAULTS.retirementList.map((x) => ({ ...x, currency: rd.currency, growthRate: rd.marketReturn })),
   };
 }
 
 const defaultIndexFundId = uid();
 const defaultHouseId = uid();
 const defaultRetirementId = uid();
+const defaultCashId = uid();
 
 const DEFAULTS = {
   profile: {
@@ -2259,7 +2929,7 @@ const DEFAULTS = {
   },
   work: { salary: 90000, currency: "EUR", yearsWorking: 30, salaryGrowth: 2 },
   expensesState: { monthly: 4000, inflation: 2.5, spendingDecline: { enabled: false } },
-  cash: { amount: 20000, rate: 2, currency: "EUR" },
+  cash: [{ id: defaultCashId, name: "Cash", amount: 20000, rate: 0, currency: "EUR" }],
   investments: [
     {
       id: defaultIndexFundId,
@@ -2361,6 +3031,10 @@ export default function RetirementCalculator() {
   // Used everywhere text is shown, including onboarding — one flag, one lookup, no
   // separate "wizard language" to keep in sync with anything.
   const tr = (key, fallback) => STRINGS[language]?.[key] ?? STRINGS.en[key] ?? fallback ?? key;
+  // tt(text): translates a literal English UI phrase via PHRASES — used for the many
+  // Field labels and dropdown options across the Inputs tabs, where inventing a
+  // semantic key for each one wasn't worth it. Same graceful fallback as tr().
+  const tt = (text) => (language === "en" ? text : PHRASES[text]?.[language] ?? text);
 
   const [profile, setProfile] = useState(DEFAULTS.profile);
   const [work, setWork] = useState(DEFAULTS.work);
@@ -2378,8 +3052,17 @@ export default function RetirementCalculator() {
   const [showMethodology, setShowMethodology] = useState(false);
   const [mortgageScheduleModalId, setMortgageScheduleModalId] = useState(null); // house id, or null when closed
   const [showMath, setShowMath] = useState(false);
+  const [infoRatesRegion, setInfoRatesRegion] = useState("EU"); // Info page: region/country tables
+  const [infoTaxCountry, setInfoTaxCountry] = useState("DE");
   const [expandedAdvanced, setExpandedAdvanced] = useState({}); // per house-card id: is the "Advanced" section open?
   const [realTermsView, setRealTermsView] = useState(false); // Results chart: nominal (future $) vs today's money
+  // Results chart detail level: "total" (one line, simplest), "assetsVsDebt" (gross
+  // assets above zero, mortgage debt below — the pre-existing per-bucket colors and the
+  // dashed debt line were confusing without a legend explaining them), or "full" (every
+  // account broken out, the original view). Defaults to the simplest one.
+  const [chartViewMode, setChartViewMode] = useState("total");
+  const [showChartDetails, setShowChartDetails] = useState(false); // Results tab: long explanation collapsed by default
+  const [showWhatIfIntro, setShowWhatIfIntro] = useState(false); // What-If tab: explanation collapsed behind an (i)
   const [fxRates, setFxRates] = useState(FX_FALLBACK);
   const [fxSource, setFxSource] = useState("fallback"); // "live" | "fallback" | "loading"
 
@@ -2411,7 +3094,10 @@ export default function RetirementCalculator() {
     if (data.profile) setProfile(data.profile);
     if (data.work) setWork(data.work);
     if (data.expensesState) setExpensesState(data.expensesState);
-    if (data.cash) setCash(data.cash);
+    if (data.cash) {
+      // migration: older saved data had a single cash object, not a list of accounts
+      setCash(Array.isArray(data.cash) ? data.cash : [{ id: uid(), name: "Cash", ...data.cash }]);
+    }
     if (data.investments) setInvestments(data.investments);
     if (data.retirement) setRetirement(data.retirement);
     if (data.withdrawalOrder) setWithdrawalOrder(data.withdrawalOrder);
@@ -2573,27 +3259,36 @@ export default function RetirementCalculator() {
       salaryGrowth: a.customRates ? a.salaryGrowth ?? 2 : 2,
     });
     setExpensesState({ monthly: a.monthlyExpenses, inflation: a.customRates ? a.inflation ?? rd.inflation : rd.inflation });
-    setCash({
-      amount: a.cash,
-      rate: a.customRates ? a.cashRate ?? rd.cashRate : rd.cashRate,
-      currency: a.multiCurrency ? a.cashCurrency || mainCcy : mainCcy,
-    });
+    setCash([
+      {
+        id: uid(),
+        name: "Cash",
+        amount: a.cash,
+        rate: a.customRates ? a.cashRate ?? rd.cashRate : rd.cashRate,
+        currency: a.multiCurrency ? a.cashCurrency || mainCcy : mainCcy,
+      },
+    ]);
 
     const newInvestments = [];
     const newOrder = ["cash"];
 
     if (a.hasInvestments) {
       a.investmentsList.forEach((item) => {
+        const itemType = item.type || "market";
         newInvestments.push({
           id: item.id,
           name: item.name || "Investment",
-          type: "market",
+          type: itemType,
           region,
           currency: a.multiCurrency ? item.currency || mainCcy : mainCcy,
           amount: item.amount || 0,
-          growthRate: item.growthRate ?? rd.marketReturn,
+          growthRate: item.growthRate ?? (itemType === "cd" ? rd.cdRate : rd.marketReturn),
           contribution: item.contribution || 0,
           contributionFrequency: "monthly",
+          dividendYield: itemType === "dividend" ? item.dividendYield ?? 3 : undefined,
+          cdLongRunRate: itemType === "cd" ? item.cdLongRunRate ?? rd.cdRateLongRun : undefined,
+          cdTenorYears: itemType === "cd" ? item.cdTenorYears ?? 1 : undefined,
+          costBasis: item.amount || 0,
         });
         newOrder.push(`investment:${item.id}`);
       });
@@ -2668,11 +3363,26 @@ export default function RetirementCalculator() {
   const currency = profile.currency || "EUR";
 
   // convert every money bucket into the base currency for simulation & totals —
-  // the raw state (native currency, as typed) stays untouched for editing
-  const convertedCash = useMemo(
-    () => ({ ...cash, amount: convertCurrency(cash.amount, cash.currency || currency, currency, fxRates) }),
+  // the raw state (native currency, as typed) stays untouched for editing.
+  // Cash is a LIST of accounts (like investments) so someone can hold cash in several
+  // currencies — but the simulation engine still only understands one pooled cash
+  // bucket, so this converts every account to the main currency and combines them into
+  // a single { amount, rate, currency } object, exactly the shape runSimulation always
+  // expected. The rate is a weighted average across accounts (by converted balance);
+  // convertedCashAccounts (below) keeps the per-account breakdown for the Cash tab UI.
+  const convertedCashAccounts = useMemo(
+    () =>
+      cash.map((c) => ({
+        ...c,
+        amount: convertCurrency(c.amount, c.currency || currency, currency, fxRates),
+      })),
     [cash, currency, fxRates]
   );
+  const convertedCash = useMemo(() => {
+    const totalAmount = convertedCashAccounts.reduce((s, c) => s + (c.amount || 0), 0);
+    const weightedRate = totalAmount > 0 ? convertedCashAccounts.reduce((s, c) => s + (c.amount || 0) * (c.rate || 0), 0) / totalAmount : 0;
+    return { amount: totalAmount, rate: round2(weightedRate), currency };
+  }, [convertedCashAccounts, currency]);
   const convertedInvestments = useMemo(
     () =>
       investments.map((inv) => {
@@ -2772,6 +3482,68 @@ export default function RetirementCalculator() {
       fiY += 1;
     }
   }
+
+  // "Biggest lever" insight: rather than just showing a countdown, tell the person
+  // which single change would move their FI date the most — turning a number into an
+  // action, which is what actually helps someone who isn't fluent in the math. Reuses
+  // computeFI (already ~76 simulations under the hood) three more times with small,
+  // concrete nudges on the three things most within someone's control: spend less,
+  // save more, or (informational, not really "controllable") a better return — then
+  // reports whichever single nudge moved the date the most.
+  const leverInsight = useMemo(() => {
+    if (daysUntilFI == null || profile.currentAge == null) return null;
+    const base = {
+      profile,
+      work: convertedWork,
+      expensesState,
+      cash: convertedCash,
+      investments: convertedInvestments,
+      retirement: convertedRetirement,
+      withdrawalOrder,
+      pension,
+      lumpSums,
+      savingsRule: effectiveSavingsRule,
+    };
+    const deltaDaysFor = (variantBundle) => {
+      const { fiAge: altFi } = computeFI(variantBundle);
+      if (altFi == null) return null;
+      const altDays = Math.max(0, Math.round((altFi - profile.currentAge) * 365.25));
+      return daysUntilFI - altDays; // positive = sooner
+    };
+
+    const scenarios = [];
+
+    // 1) spend 10% less per month
+    if (expensesState.monthly > 0) {
+      const newMonthly = Math.round(expensesState.monthly * 0.9);
+      const dDays = deltaDaysFor({ ...base, expensesState: { ...expensesState, monthly: newMonthly } });
+      if (dDays != null) scenarios.push({ type: "spend", deltaDays: dDays, amount: expensesState.monthly - newMonthly });
+    }
+
+    // 2) save 10% more (scale every ongoing contribution up)
+    const oldContrib =
+      convertedInvestments.reduce((s, i) => s + (i.type !== "house" ? i.contribution || 0 : 0), 0) +
+      convertedRetirement.reduce((s, r) => s + (r.contribution || 0), 0);
+    if (oldContrib > 0) {
+      const investmentsMore = convertedInvestments.map((i) => (i.type === "house" ? i : { ...i, contribution: (i.contribution || 0) * 1.1 }));
+      const retirementMore = convertedRetirement.map((r) => ({ ...r, contribution: (r.contribution || 0) * 1.1 }));
+      const dDays = deltaDaysFor({ ...base, investments: investmentsMore, retirement: retirementMore });
+      if (dDays != null) scenarios.push({ type: "save", deltaDays: dDays, amount: Math.round(oldContrib * 0.1) });
+    }
+
+    // 3) returns 1 point higher per year — informational, not something anyone can just
+    // decide, but useful context for how sensitive the plan is to market performance
+    const marketLever = LEVERS.find((l) => l.id === "marketRate");
+    if (marketLever) {
+      const currentAvg = marketLever.getCurrent(base);
+      const dDays = deltaDaysFor(marketLever.apply(base, currentAvg + 1));
+      if (dDays != null) scenarios.push({ type: "returns", deltaDays: dDays });
+    }
+
+    const positive = scenarios.filter((s) => s.deltaDays > 0).sort((a, b) => b.deltaDays - a.deltaDays);
+    return positive[0] || null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daysUntilFI, profile.currentAge, expensesState.monthly, convertedInvestments, convertedRetirement]);
 
   const whatIfInputs = useMemo(() => {
     let draft = {
@@ -2958,6 +3730,20 @@ export default function RetirementCalculator() {
     return hasMortgageDebt ? ["Cash", ...invNames, ...retNames, "Debt"] : ["Cash", ...invNames, ...retNames];
   }, [investments, retirement]);
   const colorForSeries = (key, idx) => (key === "Debt" ? "#FF6B5B" : PALETTE[idx % PALETTE.length]);
+  const hasMortgageDebt = seriesKeys.includes("Debt");
+  // the three chart modes, each a list of {key, name, color} pulled from the SAME
+  // underlying per-year data (deflateRecord etc. already put _total/_grossAssets/Debt/
+  // each bucket on every row) — switching modes never changes the numbers, only which
+  // of them are drawn
+  const chartSeriesForMode = {
+    total: [{ key: "_total", name: tr("net_worth_label", "Net worth"), color: "#3DDC97" }],
+    assetsVsDebt: [
+      { key: "_grossAssets", name: "Assets", color: "#4C8DFF" },
+      ...(hasMortgageDebt ? [{ key: "Debt", name: "Debt (mortgage)", color: "#FF6B5B" }] : []),
+    ],
+    full: seriesKeys.map((key, idx) => ({ key, name: key === "Debt" ? "Debt (mortgage)" : key, color: colorForSeries(key, idx) })),
+  };
+  const activeChartSeries = chartSeriesForMode[chartViewMode] || chartSeriesForMode.total;
 
   const xTicks = useMemo(() => {
     if (!years.length) return [];
@@ -3006,16 +3792,24 @@ export default function RetirementCalculator() {
 
   // synthetic "before the simulation starts" record so age = currentAge can still show a diff
   const initialRecord = useMemo(() => {
-    const rec = { age: profile.currentAge - 1, Cash: cash.amount };
-    withDisplayNames(investments, "Investment").forEach((inv) => {
-      rec[inv.displayName] = equityOf(inv);
+    const rec = { age: profile.currentAge - 1, Cash: convertedCash.amount };
+    withDisplayNames(convertedInvestments, "Investment").forEach((inv) => {
+      // same convention as the main simulation loop: houses at gross value, with their
+      // mortgage captured separately by Debt below — not double-subtracted here too
+      rec[inv.displayName] = inv.type === "house" ? Math.max(inv.amount, 0) : equityOf(inv);
     });
-    withDisplayNames(retirement, "Account").forEach((r) => {
+    withDisplayNames(convertedRetirement, "Account").forEach((r) => {
       rec[r.displayName] = r.amount;
     });
-    rec._total = cash.amount + investments.reduce((s, i) => s + equityOf(i), 0) + retirement.reduce((s, r) => s + r.amount, 0);
+    const totalDebtNow = convertedInvestments.reduce((s, i) => s + (i.type === "house" ? i.mortgageBalance || 0 : 0), 0);
+    rec.Debt = -totalDebtNow;
+    rec._total =
+      convertedCash.amount +
+      convertedInvestments.reduce((s, i) => s + Math.max(i.amount, 0), 0) +
+      convertedRetirement.reduce((s, r) => s + r.amount, 0) -
+      totalDebtNow;
     return rec;
-  }, [profile.currentAge, cash, investments, retirement]);
+  }, [profile.currentAge, convertedCash, convertedInvestments, convertedRetirement]);
 
   useEffect(() => {
     if (selectedAge != null && !years.find((y) => y.age === selectedAge)) setSelectedAge(null);
@@ -3093,6 +3887,7 @@ export default function RetirementCalculator() {
   };
   const addInvestment = () => {
     const newId = uid();
+    const rd = REGION_DEFAULTS[profile.region] || REGION_DEFAULTS.EU;
     setInvestments((prev) => [
       ...prev,
       {
@@ -3100,13 +3895,24 @@ export default function RetirementCalculator() {
         name: "New Investment",
         type: "market",
         region: profile.region,
+        currency: profile.currency,
         amount: 10000,
-        growthRate: 5,
+        growthRate: rd.marketReturn,
         contribution: 0,
         contributionFrequency: "monthly",
       },
     ]);
     setWithdrawalOrder((prev) => [...prev, `investment:${newId}`]);
+  };
+
+  // cash is a LIST of accounts, same pattern as investments — lets someone hold cash
+  // in several currencies (a EUR checking account and a USD savings account, say)
+  // instead of forcing everything into one bucket
+  const updateCashAccount = (id, patch) => setCash((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  const removeCashAccount = (id) => setCash((prev) => (prev.length > 1 ? prev.filter((c) => c.id !== id) : prev));
+  const addCashAccount = () => {
+    const rd = REGION_DEFAULTS[profile.region] || REGION_DEFAULTS.EU;
+    setCash((prev) => [...prev, { id: uid(), name: "Cash", amount: 0, rate: rd.cashRate, currency: profile.currency }]);
   };
 
   const updateRetirement = (id, patch) =>
@@ -3190,14 +3996,14 @@ export default function RetirementCalculator() {
           className="w-full max-w-xs font-semibold rounded-full py-3.5"
           style={{ background: "#FFC24B", color: "#1B1435" }}
         >
-          Get started →
+          {tr("get_started", "Get started →")}
         </button>
         <button
           onClick={() => setShowOnboarding(false)}
           className="mt-4 text-xs underline decoration-dotted"
           style={{ color: "#C9BEEA" }}
         >
-          Skip for now, I'll enter things myself
+          {tr("skip_manual_entry", "Skip for now, I'll enter things myself")}
         </button>
         <p className="mt-8 flex items-center gap-1.5 text-[11px] max-w-xs" style={{ color: "#8B7FB0" }}>
           🔒 Everything you enter stays on this phone — nothing is sent to a server, even when you save a
@@ -3234,14 +4040,26 @@ export default function RetirementCalculator() {
       <div className="min-h-screen flex flex-col" style={{ background: "#FAF9FE", fontFamily: "'Inter', sans-serif" }}>
         {fontLink}
         <div className="px-6 pt-8">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3 mb-3">
+            {wizardStepIndex > 0 ? (
+              <button
+                onClick={goBack}
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: "#EEE9F7", color: "#4C8DFF" }}
+                aria-label={tr("wizard_back", "Back")}
+              >
+                <ChevronLeft size={20} />
+              </button>
+            ) : (
+              <div className="w-9 h-9 shrink-0" />
+            )}
             <div className="h-1.5 flex-1 rounded-full overflow-hidden" style={{ background: "#EEE9F7" }}>
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{ width: `${progress}%`, background: "linear-gradient(90deg, #4C8DFF, #7C5CFC)" }}
               />
             </div>
-            <div className="ml-3 shrink-0">
+            <div className="shrink-0">
               <LanguageFlag language={language} onChange={setLanguagePersisted} />
             </div>
           </div>
@@ -3256,7 +4074,9 @@ export default function RetirementCalculator() {
               ? tr(wizardAnswers.region === "EU" ? "wizard_taxCountry_eu" : "wizard_taxCountry_us", step.question)
               : tr(`wizard_${step.id}`, step.question)}
           </h2>
-          {step.note && <p className="text-xs text-stone-400 mb-5 leading-relaxed">{step.note}</p>}
+          {step.note && (
+            <p className="text-xs text-stone-400 mb-5 leading-relaxed">{tr(`wizard_note_${step.id}`, step.note)}</p>
+          )}
           {!step.note && <div className="mb-3" />}
 
           {step.type === "region" ? (
@@ -3318,7 +4138,10 @@ export default function RetirementCalculator() {
             </div>
           ) : step.type === "investlist" ? (
             <div className="text-left">
-              {wizardAnswers.investmentsList.map((item, idx) => (
+              {wizardAnswers.investmentsList.map((item, idx) => {
+                const rd = REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU;
+                const regionDefault = defaultGrowthRateForType(rd, item.type || "market");
+                return (
                 <div key={item.id} className="rounded-2xl bg-white p-3.5 mb-3 shadow-sm border border-stone-100">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-stone-400">Investment {idx + 1}</span>
@@ -3328,28 +4151,87 @@ export default function RetirementCalculator() {
                       </button>
                     )}
                   </div>
-                  <Field label="Name">
+                  <Field label={tt("Name")}>
                     <TextInput value={item.name} onChange={(v) => wizardUpdateItem("investmentsList", item.id, { name: v })} />
                   </Field>
+                  <Field label={tt("Type")}>
+                    <SelectInput
+                      value={item.type || "market"}
+                      onChange={(v) => {
+                        const rd = REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU;
+                        const oldDefault = defaultGrowthRateForType(rd, item.type || "market");
+                        const patch = { type: v };
+                        if (v === "cd" && item.type !== "cd") {
+                          patch.growthRate = rd.cdRate;
+                          patch.cdLongRunRate = rd.cdRateLongRun;
+                          patch.cdTenorYears = item.cdTenorYears ?? 1;
+                        } else if (item.growthRate == null || item.growthRate === oldDefault) {
+                          patch.growthRate = defaultGrowthRateForType(rd, v);
+                        }
+                        wizardUpdateItem("investmentsList", item.id, patch);
+                      }}
+                      options={[
+                        { value: "market", label: tt("Market (growth)") },
+                        { value: "dividend", label: tt("Dividend-producing") },
+                        { value: "bond", label: tt("Bond / fixed income") },
+                        { value: "cd", label: tt("CD / term deposit (fixed rate)") },
+                      ]}
+                    />
+                  </Field>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Amount today">
+                    <Field label={tt("Amount today")}>
                       <NumberInput accent="#4C8DFF" value={item.amount} onChange={(v) => wizardUpdateItem("investmentsList", item.id, { amount: v })} />
                     </Field>
-                    <Field label="Add per month">
+                    <Field label={tt("Add per month")}>
                       <NumberInput accent="#4C8DFF" value={item.contribution} onChange={(v) => wizardUpdateItem("investmentsList", item.id, { contribution: v })} />
                     </Field>
-                    {wizardAnswers.customRates && (
-                      <Field label={`Expected growth rate (cautious default; ${(REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU).index} historical avg is ${(REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU).historicalReturn}%)`}>
+                    {item.type === "dividend" && (
+                      <Field label={tt("Dividend yield")}>
                         <NumberInput
                           accent="#4C8DFF"
-                          value={item.growthRate ?? 6}
+                          value={item.dividendYield ?? 3}
                           suffix="%/yr"
-                          onChange={(v) => wizardUpdateItem("investmentsList", item.id, { growthRate: v })}
+                          onChange={(v) => wizardUpdateItem("investmentsList", item.id, { dividendYield: v })}
                         />
                       </Field>
                     )}
+                    {wizardAnswers.customRates && (
+                      <>
+                        <Field label={tt("Growth rate")}>
+                          <SelectInput
+                            value={item.rateMode || "auto"}
+                            onChange={(v) =>
+                              wizardUpdateItem("investmentsList", item.id, {
+                                rateMode: v,
+                                growthRate: v === "auto" ? regionDefault : item.growthRate ?? regionDefault,
+                              })
+                            }
+                            options={[
+                              { value: "auto", label: `Use region default (${regionDefault}%)` },
+                              { value: "manual", label: tt("Set my own number") },
+                            ]}
+                          />
+                        </Field>
+                        {(item.rateMode || "auto") === "manual" && (
+                          <Field
+                            label={
+                              item.type === "cd"
+                                ? tt("Fixed interest rate (today's rate)")
+                                : `Expected growth rate (cautious default; ${rd.index} historical avg is ${rd.historicalReturn}%)`
+                            }
+                          >
+                            <NumberInput
+                              accent="#4C8DFF"
+                              value={item.growthRate ?? 6}
+                              suffix="%/yr"
+                              onChange={(v) => wizardUpdateItem("investmentsList", item.id, { growthRate: v })}
+                            />
+                          </Field>
+                        )}
+                      </>
+                    )}
                     {wizardAnswers.multiCurrency && (
-                      <Field label="Currency">
+                      <Field label={tt("Currency")}>
                         <SelectInput
                           value={item.currency || "EUR"}
                           onChange={(v) => wizardUpdateItem("investmentsList", item.id, { currency: v })}
@@ -3359,13 +4241,24 @@ export default function RetirementCalculator() {
                     )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               <button
-                onClick={() => wizardAddItem("investmentsList", { name: "Investment", amount: 10000, contribution: 200, growthRate: 6, currency: "EUR" })}
+                onClick={() => {
+                  const rd = REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU;
+                  wizardAddItem("investmentsList", {
+                    name: "Investment",
+                    type: "market",
+                    amount: 10000,
+                    contribution: 200,
+                    growthRate: rd.marketReturn,
+                    currency: rd.currency,
+                  });
+                }}
                 className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
                 style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
               >
-                + Add another investment
+                + {tt("Add another investment")}
               </button>
               <button
                 onClick={goNext}
@@ -3390,104 +4283,138 @@ export default function RetirementCalculator() {
                         </button>
                       )}
                     </div>
-                    <Field label="Name">
+                    <Field label={tt("Name")}>
                       <TextInput value={item.name} onChange={(v) => wizardUpdateItem("housesList", item.id, { name: v })} />
                     </Field>
-                    <Field label="This is my">
+                    <Field label={tt("This is my")}>
                       <SelectInput
                         value={item.usage || "primary"}
                         onChange={(v) => wizardUpdateItem("housesList", item.id, { usage: v })}
                         options={[
-                          { value: "primary", label: "Primary home" },
-                          { value: "rental", label: "Rental property" },
+                          { value: "primary", label: tt("Primary home") },
+                          { value: "rental", label: tt("Rental property") },
                         ]}
                       />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Value today">
+                      <Field label={tt("Value today")}>
                         <NumberInput accent="#4C8DFF" value={item.value} onChange={(v) => wizardUpdateItem("housesList", item.id, { value: v })} />
                       </Field>
-                      <Field label="Mortgage left (0 if none)">
-                        <NumberInput
-                          accent="#4C8DFF"
-                          value={item.mortgageBalance}
-                          onChange={(v) => wizardUpdateMortgage(item, { mortgageBalance: v })}
-                        />
-                      </Field>
+                      {isRental && (
+                        <Field label={tt("Monthly rent it earns")}>
+                          <NumberInput accent="#4C8DFF" value={item.rent || 0} onChange={(v) => wizardUpdateItem("housesList", item.id, { rent: v })} />
+                        </Field>
+                      )}
                     </div>
-                    {isRental && (
-                      <Field label="Monthly rent it earns">
-                        <NumberInput accent="#4C8DFF" value={item.rent || 0} onChange={(v) => wizardUpdateItem("housesList", item.id, { rent: v })} />
-                      </Field>
-                    )}
-                    <Field label="Monthly mortgage payment (0 if none)">
-                      <NumberInput
-                        accent="#4C8DFF"
-                        value={item.mortgagePayment}
-                        onChange={(v) => wizardUpdateMortgage(item, { mortgagePayment: v })}
+                    <Field label="Does this have a mortgage?">
+                      <SelectInput
+                        value={item.hasMortgage ? "yes" : "no"}
+                        onChange={(v) =>
+                          wizardUpdateItem("housesList", item.id, v === "yes" ? { hasMortgage: true } : { hasMortgage: false, mortgageBalance: 0, mortgagePayment: 0 })
+                        }
+                        options={[
+                          { value: "no", label: "No — owned outright" },
+                          { value: "yes", label: "Yes — still paying it off" },
+                        ]}
                       />
                     </Field>
-                    {(item.mortgageBalance || 0) > 0 && (
+                    {item.hasMortgage && (
                       <>
-                        <Field label="I know:">
-                          <SelectInput
-                            value={mode}
-                            onChange={(v) => {
-                              if (v === "years") {
-                                const implied = solveMortgageYears(item.mortgageBalance || 0, item.mortgagePayment || 0, item.mortgageRate || 0);
-                                wizardUpdateItem("housesList", item.id, {
-                                  mortgageInputMode: v,
-                                  mortgageYearsLeft: isFinite(implied) ? Math.round(implied * 10) / 10 : item.mortgageYearsLeft || 20,
-                                });
-                              } else {
-                                wizardUpdateItem("housesList", item.id, { mortgageInputMode: v });
-                              }
-                            }}
-                            options={[
-                              { value: "rate", label: "Interest rate" },
-                              { value: "years", label: "Years remaining" },
-                            ]}
-                          />
-                        </Field>
-                        {mode === "rate" ? (
-                          <Field label="Interest rate">
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label={tt("Mortgage left (0 if none)")}>
                             <NumberInput
                               accent="#4C8DFF"
-                              value={item.mortgageRate ?? 4.5}
-                              suffix="%/yr"
-                              onChange={(v) => wizardUpdateItem("housesList", item.id, { mortgageRate: v })}
+                              value={item.mortgageBalance}
+                              onChange={(v) => wizardUpdateMortgage(item, { mortgageBalance: v })}
                             />
                           </Field>
-                        ) : (
-                          <Field label="Years remaining">
+                          <Field label={tt("Monthly mortgage payment (0 if none)")}>
                             <NumberInput
                               accent="#4C8DFF"
-                              value={item.mortgageYearsLeft ?? 20}
-                              onChange={(v) => {
-                                const solved = solveMortgageRate(item.mortgageBalance || 0, item.mortgagePayment || 0, v);
-                                wizardUpdateItem("housesList", item.id, {
-                                  mortgageYearsLeft: v,
-                                  mortgageRate: solved != null ? solved : item.mortgageRate,
-                                });
-                              }}
+                              value={item.mortgagePayment}
+                              onChange={(v) => wizardUpdateMortgage(item, { mortgagePayment: v })}
                             />
                           </Field>
+                        </div>
+                        {(item.mortgageBalance || 0) > 0 && (
+                          <>
+                            <Field label={tt("I know:")}>
+                              <SelectInput
+                                value={mode}
+                                onChange={(v) => {
+                                  if (v === "years") {
+                                    const implied = solveMortgageYears(item.mortgageBalance || 0, item.mortgagePayment || 0, item.mortgageRate || 0);
+                                    wizardUpdateItem("housesList", item.id, {
+                                      mortgageInputMode: v,
+                                      mortgageYearsLeft: isFinite(implied) ? Math.round(implied * 10) / 10 : item.mortgageYearsLeft || 20,
+                                    });
+                                  } else {
+                                    wizardUpdateItem("housesList", item.id, { mortgageInputMode: v });
+                                  }
+                                }}
+                                options={[
+                                  { value: "rate", label: tt("Interest rate") },
+                                  { value: "years", label: tt("Years remaining") },
+                                ]}
+                              />
+                            </Field>
+                            {mode === "rate" ? (
+                              <Field label={tt("Interest rate")}>
+                                <NumberInput
+                                  accent="#4C8DFF"
+                                  value={item.mortgageRate ?? 4.5}
+                                  suffix="%/yr"
+                                  onChange={(v) => wizardUpdateItem("housesList", item.id, { mortgageRate: v })}
+                                />
+                              </Field>
+                            ) : (
+                              <Field label={tt("Years remaining")}>
+                                <NumberInput
+                                  accent="#4C8DFF"
+                                  value={item.mortgageYearsLeft ?? 20}
+                                  onChange={(v) => {
+                                    const solved = solveMortgageRate(item.mortgageBalance || 0, item.mortgagePayment || 0, v);
+                                    wizardUpdateItem("housesList", item.id, {
+                                      mortgageYearsLeft: v,
+                                      mortgageRate: solved != null ? solved : item.mortgageRate,
+                                    });
+                                  }}
+                                />
+                              </Field>
+                            )}
+                          </>
                         )}
                       </>
                     )}
                     <div className="grid grid-cols-2 gap-3">
                       {wizardAnswers.customRates && (
-                        <Field label="Expected appreciation">
-                          <NumberInput
-                            accent="#4C8DFF"
-                            value={item.growthRate ?? 3}
-                            suffix="%/yr"
-                            onChange={(v) => wizardUpdateItem("housesList", item.id, { growthRate: v })}
-                          />
-                        </Field>
+                        <>
+                          <Field label={tt("Growth rate")}>
+                            <SelectInput
+                              value={item.rateMode || "auto"}
+                              onChange={(v) =>
+                                wizardUpdateItem("housesList", item.id, { rateMode: v, growthRate: v === "auto" ? 3 : item.growthRate ?? 3 })
+                              }
+                              options={[
+                                { value: "auto", label: "Use default (3%)" },
+                                { value: "manual", label: tt("Set my own number") },
+                              ]}
+                            />
+                          </Field>
+                          {(item.rateMode || "auto") === "manual" && (
+                            <Field label={tt("Expected appreciation")}>
+                              <NumberInput
+                                accent="#4C8DFF"
+                                value={item.growthRate ?? 3}
+                                suffix="%/yr"
+                                onChange={(v) => wizardUpdateItem("housesList", item.id, { growthRate: v })}
+                              />
+                            </Field>
+                          )}
+                        </>
                       )}
                       {wizardAnswers.multiCurrency && (
-                        <Field label="Currency">
+                        <Field label={tt("Currency")}>
                           <SelectInput
                             value={item.currency || "EUR"}
                             onChange={(v) => wizardUpdateItem("housesList", item.id, { currency: v })}
@@ -3496,13 +4423,13 @@ export default function RetirementCalculator() {
                         </Field>
                       )}
                     </div>
-                    <Field label="Could you sell this if you needed the money?">
+                    <Field label={tt("Could you sell this if you needed the money?")}>
                       <SelectInput
                         value={item.sellable === false ? "no" : "yes"}
                         onChange={(v) => wizardUpdateItem("housesList", item.id, { sellable: v === "yes" })}
                         options={[
-                          { value: "yes", label: "Yes — include it as a fallback" },
-                          { value: "no", label: "No — never sell (e.g. keep the family home)" },
+                          { value: "yes", label: tt("Yes — include it as a fallback") },
+                          { value: "no", label: tt("No — never sell (e.g. keep the family home)") },
                         ]}
                       />
                     </Field>
@@ -3514,20 +4441,20 @@ export default function RetirementCalculator() {
                       return (
                         <>
                           {item.usage !== "rental" && (
-                            <Field label="If it's sold, what happens?">
+                            <Field label={tt("If it's sold, what happens?")}>
                               <SelectInput
                                 value={effAction}
                                 onChange={(v) => wizardUpdateItem("housesList", item.id, { postSaleAction: v })}
                                 options={[
-                                  { value: "rebuy", label: "Buy a new home for a set amount" },
-                                  { value: "resize", label: "Buy something worth a multiple of the sale price" },
-                                  { value: "rent", label: "Rent afterward" },
+                                  { value: "rebuy", label: tt("Buy a new home for a set amount") },
+                                  { value: "resize", label: tt("Buy something worth a multiple of the sale price") },
+                                  { value: "rent", label: tt("Rent afterward") },
                                 ]}
                               />
                             </Field>
                           )}
                           {wizardAnswers.customRates && (
-                            <Field label="Agency / selling fee">
+                            <Field label={tt("Agency / selling fee")}>
                               <NumberInput
                                 accent="#4C8DFF"
                                 value={item.sellingFeePercent ?? 4}
@@ -3537,7 +4464,7 @@ export default function RetirementCalculator() {
                             </Field>
                           )}
                           {item.usage !== "rental" && effAction === "rebuy" && (
-                            <Field label="Value of the new home">
+                            <Field label={tt("Value of the new home")}>
                               <NumberInput
                                 accent="#4C8DFF"
                                 value={item.rebuyValue || 0}
@@ -3546,7 +4473,7 @@ export default function RetirementCalculator() {
                             </Field>
                           )}
                           {item.usage !== "rental" && effAction === "resize" && (
-                            <Field label="Resize factor (0.5 = half, 2 = double)">
+                            <Field label={tt("Resize factor (0.5 = half, 2 = double)")}>
                               <NumberInput
                                 accent="#4C8DFF"
                                 value={item.resizeFactor ?? 1}
@@ -3556,7 +4483,7 @@ export default function RetirementCalculator() {
                             </Field>
                           )}
                           {item.usage !== "rental" && effAction === "rent" && (
-                            <Field label="Monthly rent after selling">
+                            <Field label={tt("Monthly rent after selling")}>
                               <NumberInput
                                 accent="#4C8DFF"
                                 value={item.postSaleRent || 0}
@@ -3566,19 +4493,19 @@ export default function RetirementCalculator() {
                           )}
                           {(item.usage === "rental" || effAction === "rent") && (
                             <>
-                              <Field label="What should happen to the money?">
+                              <Field label={tt("What should happen to the money?")}>
                                 <SelectInput
                                   value={item.reinvestAs || "cash"}
                                   onChange={(v) => wizardUpdateItem("housesList", item.id, { reinvestAs: v })}
                                   options={[
-                                    { value: "cash", label: "Keep as cash" },
-                                    { value: "cd", label: "Put it in a CD" },
-                                    { value: "market", label: "Invest it in the market" },
+                                    { value: "cash", label: tt("Keep as cash") },
+                                    { value: "cd", label: tt("Put it in a CD") },
+                                    { value: "market", label: tt("Invest it in the market") },
                                   ]}
                                 />
                               </Field>
                               {(item.reinvestAs === "cd" || item.reinvestAs === "market") && (
-                                <Field label={item.reinvestAs === "cd" ? "CD interest rate" : "Expected market return"}>
+                                <Field label={item.reinvestAs === "cd" ? tt("CD interest rate") : tt("Expected market return")}>
                                   <NumberInput
                                     accent="#4C8DFF"
                                     value={item.reinvestRate || 0}
@@ -3601,31 +4528,33 @@ export default function RetirementCalculator() {
                 );
               })}
               <button
-                onClick={() =>
+                onClick={() => {
+                  const rd = REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU;
                   wizardAddItem("housesList", {
                     name: "Rental property",
                     usage: "rental",
                     value: 250000,
-                    mortgageBalance: 100000,
-                    mortgagePayment: 900,
+                    hasMortgage: false,
+                    mortgageBalance: 0,
+                    mortgagePayment: 0,
                     mortgageInputMode: "rate",
                     mortgageRate: 4.5,
                     mortgageYearsLeft: 20,
                     rent: 1200,
                     growthRate: 3,
-                    currency: "EUR",
+                    currency: rd.currency,
                     sellable: true,
                     postSaleAction: "none",
                     rebuyValue: 0,
                     resizeFactor: 1,
                     postSaleRent: 0,
                     sellingFeePercent: 4,
-                  })
-                }
+                  });
+                }}
                 className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
                 style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
               >
-                + Add another property
+                + {tt("Add another property")}
               </button>
               <button
                 onClick={goNext}
@@ -3647,27 +4576,52 @@ export default function RetirementCalculator() {
                       </button>
                     )}
                   </div>
-                  <Field label="Name">
+                  <Field label={tt("Name")}>
                     <TextInput value={item.name} onChange={(v) => wizardUpdateItem("retirementList", item.id, { name: v })} />
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="Balance today">
+                    <Field label={tt("Balance today")}>
                       <NumberInput accent="#4C8DFF" value={item.balance} onChange={(v) => wizardUpdateItem("retirementList", item.id, { balance: v })} />
                     </Field>
-                    <Field label="Added per year">
+                    <Field label={tt("Added per year")}>
                       <NumberInput accent="#4C8DFF" value={item.contribution} onChange={(v) => wizardUpdateItem("retirementList", item.id, { contribution: v })} />
                     </Field>
                     {wizardAnswers.customRates && (
-                      <Field label={`Expected growth rate (cautious default; ${(REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU).index} historical avg is ${(REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU).historicalReturn}%)`}>
-                        <NumberInput
-                          accent="#4C8DFF"
-                          value={item.growthRate ?? 6}
-                          suffix="%/yr"
-                          onChange={(v) => wizardUpdateItem("retirementList", item.id, { growthRate: v })}
-                        />
-                      </Field>
+                      <>
+                        <Field label={tt("Growth rate")}>
+                          <SelectInput
+                            value={item.rateMode || "auto"}
+                            onChange={(v) => {
+                              const rd = REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU;
+                              wizardUpdateItem("retirementList", item.id, {
+                                rateMode: v,
+                                growthRate: v === "auto" ? rd.marketReturn : item.growthRate ?? rd.marketReturn,
+                              });
+                            }}
+                            options={[
+                              {
+                                value: "auto",
+                                label: `Use region default (${(REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU).marketReturn}%)`,
+                              },
+                              { value: "manual", label: tt("Set my own number") },
+                            ]}
+                          />
+                        </Field>
+                        {(item.rateMode || "auto") === "manual" && (
+                          <Field
+                            label={`Expected growth rate (cautious default; ${(REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU).index} historical avg is ${(REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU).historicalReturn}%)`}
+                          >
+                            <NumberInput
+                              accent="#4C8DFF"
+                              value={item.growthRate ?? 6}
+                              suffix="%/yr"
+                              onChange={(v) => wizardUpdateItem("retirementList", item.id, { growthRate: v })}
+                            />
+                          </Field>
+                        )}
+                      </>
                     )}
-                    <Field label="Minimum withdrawal age">
+                    <Field label={tt("Minimum withdrawal age")}>
                       <NumberInput
                         accent="#4C8DFF"
                         value={item.minAge ?? 60}
@@ -3675,7 +4629,7 @@ export default function RetirementCalculator() {
                       />
                     </Field>
                     {wizardAnswers.multiCurrency && (
-                      <Field label="Currency">
+                      <Field label={tt("Currency")}>
                         <SelectInput
                           value={item.currency || "EUR"}
                           onChange={(v) => wizardUpdateItem("retirementList", item.id, { currency: v })}
@@ -3684,13 +4638,13 @@ export default function RetirementCalculator() {
                       </Field>
                     )}
                   </div>
-                  <Field label="Tax treatment">
+                  <Field label={tt("Tax treatment")}>
                     <SelectInput
                       value={item.taxTreatment || "pretax"}
                       onChange={(v) => wizardUpdateItem("retirementList", item.id, { taxTreatment: v })}
                       options={[
-                        { value: "pretax", label: "Taxed when withdrawn" },
-                        { value: "posttax", label: "Already taxed — tax-free withdrawal" },
+                        { value: "pretax", label: tt("Taxed when withdrawn") },
+                        { value: "posttax", label: tt("Already taxed — tax-free withdrawal") },
                       ]}
                     />
                   </Field>
@@ -3711,7 +4665,7 @@ export default function RetirementCalculator() {
                 className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
                 style={{ background: "#4C8DFF1A", color: "#1E4FA8" }}
               >
-                + Add another account
+                + {tt("Add another account")}
               </button>
               <button
                 onClick={goNext}
@@ -3776,14 +4730,14 @@ export default function RetirementCalculator() {
           ) : step.type === "pension" ? (
             <div className="text-left">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Starts at age">
+                <Field label={tt("Starts at age")}>
                   <NumberInput
                     accent="#4C8DFF"
                     value={wizardAnswers.pensionStartAge}
                     onChange={(v) => setWizardAnswers((a) => ({ ...a, pensionStartAge: v }))}
                   />
                 </Field>
-                <Field label="% of final salary">
+                <Field label={tt("% of final salary")}>
                   <NumberInput
                     accent="#4C8DFF"
                     value={wizardAnswers.pensionPercent}
@@ -3792,13 +4746,13 @@ export default function RetirementCalculator() {
                   />
                 </Field>
               </div>
-              <Field label="Does it rise with inflation?">
+              <Field label={tt("Does it rise with inflation?")}>
                 <SelectInput
                   value={wizardAnswers.pensionIndexed === false ? "no" : "yes"}
                   onChange={(v) => setWizardAnswers((a) => ({ ...a, pensionIndexed: v === "yes" }))}
                   options={[
-                    { value: "yes", label: "Yes — indexed to inflation" },
-                    { value: "no", label: "No — fixed amount forever" },
+                    { value: "yes", label: tt("Yes — indexed to inflation") },
+                    { value: "no", label: tt("No — fixed amount forever") },
                   ]}
                 />
               </Field>
@@ -3841,7 +4795,7 @@ export default function RetirementCalculator() {
                       <div className="text-sm font-medium text-stone-700">{value}</div>
                     </div>
                     <button onClick={() => goToStep(editId)} className="shrink-0 text-xs font-semibold" style={{ color: "#4C8DFF" }}>
-                      Edit
+                      {tr("edit_label", "Edit")}
                     </button>
                   </div>
                 );
@@ -3906,7 +4860,7 @@ export default function RetirementCalculator() {
                           className="shrink-0 text-xs font-semibold"
                           style={{ color: "#4C8DFF" }}
                         >
-                          Edit
+                          {tr("edit_label", "Edit")}
                         </button>
                       </div>
                     </div>
@@ -3934,7 +4888,7 @@ export default function RetirementCalculator() {
               />
               {step.id === "cash" && wizardAnswers.multiCurrency && (
                 <div className="mt-3">
-                  <Field label="Currency">
+                  <Field label={tt("Currency")}>
                     <SelectInput
                       value={wizardAnswers.cashCurrency || "EUR"}
                       onChange={(v) => setWizardAnswers((a) => ({ ...a, cashCurrency: v }))}
@@ -3951,14 +4905,6 @@ export default function RetirementCalculator() {
                 {isLast ? tr("wizard_see_results", "See my results →") : tr("wizard_next", "Next →")}
               </button>
             </>
-          )}
-        </div>
-
-        <div className="pb-8 text-center">
-          {wizardStepIndex > 0 && (
-            <button onClick={goBack} className="text-xs text-stone-400">
-              {tr("wizard_back", "← Back")}
-            </button>
           )}
         </div>
       </div>
@@ -4002,7 +4948,7 @@ export default function RetirementCalculator() {
               className="mt-5 rounded-full px-6 py-2.5 text-sm font-semibold"
               style={{ background: "rgba(255,255,255,0.25)", color: "white" }}
             >
-              Nice!
+              {tr("celebration_dismiss", "Nice!")}
             </button>
           </div>
         </div>
@@ -4012,7 +4958,7 @@ export default function RetirementCalculator() {
         (() => {
           const inv = investments.find((i) => i.id === mortgageScheduleModalId);
           if (!inv) return null;
-          const rate = inv.mortgageRateType === "floating" ? cash.rate : inv.mortgageRate || 0;
+          const rate = inv.mortgageRateType === "floating" ? convertedCash.rate : inv.mortgageRate || 0;
           const schedule = buildMortgageSchedule(inv.mortgageBalance || 0, inv.mortgagePayment || 0, rate);
           const color = SECTION_COLORS.investments;
           return (
@@ -4083,7 +5029,7 @@ export default function RetirementCalculator() {
         <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
           <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 text-white" style={{ background: heroGradient }}>
             <h2 className="text-lg font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              How this app works
+              {tr("how_this_app_works", "How this app works")}
             </h2>
             <button onClick={() => setShowMethodology(false)} className="rounded-full p-1.5" style={{ background: "rgba(255,255,255,0.15)" }}>
               <X size={18} />
@@ -4196,7 +5142,25 @@ holding period, i.e. "a somewhat disappointing decade":
 
 So the default is roughly (historical − 3). It is NOT a
 forecast — it's a deliberately cautious planning number.
-Every rate is editable.`,
+Every rate is editable.
+
+BOND / FIXED-INCOME DEFAULT — same idea, smaller haircut
+One blended government + investment-grade corporate bond
+index per region, same "cautious decade" methodology as
+equities above, but haircut LESS (~1–1.5 points instead of
+~3) since bonds are meaningfully less volatile:
+
+  region   historical bond avg   default
+  US       5.0%                  3.5%
+  EU       4.0%                  2.5%
+  UK       5.0%                  3.5%
+  CA       5.5%                  4.0%
+
+High-yield corporate bonds sit somewhere between this and
+equities in risk/return and aren't modeled as their own
+index — pick a rate between the two defaults, or your own
+number, if that's what you hold. Bonds get their own
+What-If lever, separate from equities.`,
                   },
                   {
                     color: SECTION_COLORS.retirement,
@@ -4498,7 +5462,7 @@ is shown in today's terms.`,
                   {
                     color: SECTION_COLORS.investments,
                     title: "Growth, every single year",
-                    body: "Each bucket (cash, each investment, each retirement account, each property) grows by the yearly rate you set for it, compounding automatically. A \"CD / term deposit\" is a special case in two ways: like cash, its interest is taxed every year it's earned rather than when you sell, so there's no further tax when you cash it in — and its rate doesn't stay fixed forever. You earn the rate you set for as long as it's locked in (its \"tenor\"), then it glides gradually, over about 5 years, to a lower \"long-run\" rate rather than assuming today's rate lasts for decades. That's because CD rates track central bank policy, not a stable long-run average — so the long-run rate is anchored to inflation instead (roughly inflation minus 0.5%), which matches history better than either today's rate or a raw historical average would. Both the tenor and the long-run rate are editable. That growth is applied before that year's withdrawals — so money you need this year still earns a full year's return first. The default growth rate for equities is deliberately cautious: rather than the rosy historical average of your region's main index, it's set about 3 points lower — roughly what you'd get in a disappointing decade (statistically, a 25th-percentile 10-year stretch). So the US default is 7% rather than the historical 10%, and the UK 3.5% rather than 6.5%. If markets do average or better, you'll beat this plan rather than fall short of it. Every rate is editable.",
+                    body: "Each bucket (cash, each investment, each retirement account, each property) grows by the yearly rate you set for it, compounding automatically. A \"CD / term deposit\" is a special case in two ways: like cash, its interest is taxed every year it's earned rather than when you sell, so there's no further tax when you cash it in — and its rate doesn't stay fixed forever. You earn the rate you set for as long as it's locked in (its \"tenor\"), then it glides gradually, over about 5 years, to a lower \"long-run\" rate rather than assuming today's rate lasts for decades. That's because CD rates track central bank policy, not a stable long-run average — so the long-run rate is anchored to inflation instead (roughly inflation minus 0.5%), which matches history better than either today's rate or a raw historical average would. Both the tenor and the long-run rate are editable. That growth is applied before that year's withdrawals — so money you need this year still earns a full year's return first. The default growth rate for equities is deliberately cautious: rather than the rosy historical average of your region's main index, it's set about 3 points lower — roughly what you'd get in a disappointing decade (statistically, a 25th-percentile 10-year stretch). So the US default is 7% rather than the historical 10%, and the UK 3.5% rather than 6.5%. \"Bond / fixed income\" is a separate investment type for government and investment-grade corporate bonds, with its own regional default (also a cautious decade, just haircut less than equities since bonds move around less) and its own What-If lever, so you can flex your bond and equity assumptions independently rather than one blended number standing in for both. High-yield corporate bonds aren't modeled as their own index — pick a rate between the bond and equity defaults, or your own number. If markets do average or better, you'll beat this plan rather than fall short of it. Every rate is editable.",
                   },
                   {
                     color: "#F2545B",
@@ -4577,6 +5541,171 @@ is shown in today's terms.`,
               </div>
             ))}
 
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "#3DDC97" }} />
+                <h3 className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                  Regional rates & tax brackets — the actual tables
+                </h3>
+              </div>
+              <p className="text-xs text-stone-500 leading-relaxed pl-4.5 mb-2">
+                Every default number in the app comes from one of these two tables. Pick a region to see its cash,
+                CD, equity, and bond defaults; for the EU and the US, pick a country or state too, to see its
+                income tax brackets.
+              </p>
+              <div className="pl-4.5">
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {REGIONS.map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => {
+                        setInfoRatesRegion(r);
+                        setInfoTaxCountry(r === "EU" ? "DE" : r === "US" ? "US_OTHER" : r === "Canada" ? "CA" : r === "UK" ? "UK" : "GENERIC_OTHER");
+                      }}
+                      className="rounded-full px-3 py-1.5 text-xs font-semibold"
+                      style={
+                        infoRatesRegion === r
+                          ? { background: "#3DDC971A", color: "#1B7A4C", border: "1px solid #3DDC97" }
+                          : { background: "white", color: "#8A81A6", border: "1px solid #E7E5E4" }
+                      }
+                    >
+                      {REGION_DEFAULTS[r]?.label || r}
+                    </button>
+                  ))}
+                </div>
+
+                {(() => {
+                  const rd = REGION_DEFAULTS[infoRatesRegion] || REGION_DEFAULTS.EU;
+                  return (
+                    <div className="overflow-x-auto -mx-1 mb-4">
+                      <table className="w-full text-[11px] border-collapse">
+                        <thead>
+                          <tr className="text-left text-stone-400 border-b border-stone-200">
+                            <th className="py-1.5 px-1 font-medium">Asset class</th>
+                            <th className="py-1.5 px-1 font-medium text-right">Default</th>
+                            <th className="py-1.5 px-1 font-medium text-right">Historical avg</th>
+                            <th className="py-1.5 px-1 font-medium">Reference index</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-stone-100">
+                            <td className="py-1.5 px-1">Cash</td>
+                            <td className="py-1.5 px-1 text-right">{rd.cashRate}%</td>
+                            <td className="py-1.5 px-1 text-right">—</td>
+                            <td className="py-1.5 px-1 text-stone-400">ordinary bank account</td>
+                          </tr>
+                          <tr className="border-b border-stone-100">
+                            <td className="py-1.5 px-1">
+                              CD / term deposit
+                              <div className="text-stone-400">→ long-run</div>
+                            </td>
+                            <td className="py-1.5 px-1 text-right">
+                              {rd.cdRate}%<div className="text-stone-400">→ {rd.cdRateLongRun}%</div>
+                            </td>
+                            <td className="py-1.5 px-1 text-right">—</td>
+                            <td className="py-1.5 px-1 text-stone-400">central-bank policy rate</td>
+                          </tr>
+                          <tr className="border-b border-stone-100">
+                            <td className="py-1.5 px-1">Equities</td>
+                            <td className="py-1.5 px-1 text-right">{rd.marketReturn}%</td>
+                            <td className="py-1.5 px-1 text-right">{rd.historicalReturn}%</td>
+                            <td className="py-1.5 px-1 text-stone-400">{rd.index}</td>
+                          </tr>
+                          <tr className="border-b border-stone-100">
+                            <td className="py-1.5 px-1">Bonds / fixed income</td>
+                            <td className="py-1.5 px-1 text-right">{rd.bondReturn}%</td>
+                            <td className="py-1.5 px-1 text-right">{rd.bondHistoricalReturn}%</td>
+                            <td className="py-1.5 px-1 text-stone-400">{rd.bondIndex}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-1.5 px-1">Inflation</td>
+                            <td className="py-1.5 px-1 text-right">{rd.inflation}%</td>
+                            <td className="py-1.5 px-1 text-right">—</td>
+                            <td className="py-1.5 px-1 text-stone-400">long-run central-bank target/average</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+
+                {(infoRatesRegion === "EU" || infoRatesRegion === "US") && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {(infoRatesRegion === "EU" ? EU_TAX_COUNTRY_OPTIONS : US_TAX_COUNTRY_OPTIONS).map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setInfoTaxCountry(opt.value)}
+                        className="rounded-full px-3 py-1.5 text-xs font-semibold"
+                        style={
+                          infoTaxCountry === opt.value
+                            ? { background: "#4C8DFF1A", color: "#1E4FA8", border: "1px solid #4C8DFF" }
+                            : { background: "white", color: "#8A81A6", border: "1px solid #E7E5E4" }
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {(() => {
+                  const supported = isTaxCountrySupported(infoTaxCountry);
+                  const table = TAX_TABLES[infoTaxCountry];
+                  if (!supported || !table) {
+                    return (
+                      <p className="text-xs text-stone-400 italic mb-2">
+                        No real tax-bracket table for this one yet — the app falls back to a fixed number you set
+                        yourself, averaged from France/Germany/Italy/Spain at your income as a starting point.
+                      </p>
+                    );
+                  }
+                  let lower = 0;
+                  const rows = table.ordinary.map((b) => {
+                    const row = { from: lower, to: b.upTo, rate: b.rate };
+                    lower = b.upTo;
+                    return row;
+                  });
+                  const rd = REGION_DEFAULTS[infoRatesRegion] || REGION_DEFAULTS.EU;
+                  const symbol = currencySymbol(rd.currency);
+                  return (
+                    <>
+                      <div className="overflow-x-auto -mx-1 mb-2">
+                        <table className="w-full text-[11px] border-collapse">
+                          <thead>
+                            <tr className="text-left text-stone-400 border-b border-stone-200">
+                              <th className="py-1.5 px-1 font-medium">Income tax bracket ({symbol})</th>
+                              <th className="py-1.5 px-1 font-medium text-right">Rate</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row, idx) => (
+                              <tr key={idx} className="border-b border-stone-100">
+                                <td className="py-1.5 px-1">
+                                  {symbol}
+                                  {Math.round(row.from).toLocaleString("en-US")} –{" "}
+                                  {row.to === Infinity ? "up" : symbol + Math.round(row.to).toLocaleString("en-US")}
+                                </td>
+                                <td className="py-1.5 px-1 text-right">{row.rate}%</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="text-[11px] text-stone-400 leading-relaxed pl-0.5">
+                        {table.salaryOnlyAddOn
+                          ? `Plus a mandatory salary-only social-insurance add-on (${
+                              Array.isArray(table.salaryOnlyAddOn) ? "banded, up to " + table.salaryOnlyAddOn[table.salaryOnlyAddOn.length - 2]?.rate + "%" : table.salaryOnlyAddOn + "%"
+                            }) — applies only to a paycheck, never to a pension, rent, or interest. `
+                          : ""}
+                        Dividends and capital gains are taxed separately from this table — see the sections above for
+                        exactly how each works in this country. Single filer, no dependents, {table.label.includes("2025") ? "2025" : "current"} figures.
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+
             <div className="rounded-2xl px-4 py-3.5 text-xs leading-relaxed" style={{ background: "#FFF1EC", color: "#B23A22" }}>
               This is a simplified planning tool built to help you explore "what if" scenarios — it is not
               financial, tax, or legal advice. Real taxes, investment products, and mortgages are more complex
@@ -4635,12 +5764,14 @@ is shown in today's terms.`,
             <div className="text-[10px] mb-1.5" style={{ color: "#8B7FB0" }}>
               All figures converted to your base currency ({currency}).
             </div>
-            <div className="flex justify-between py-1">
-              <span style={{ color: "#C9BEEA" }}>
-                Cash {cash.currency && cash.currency !== currency ? `(${cash.currency})` : ""}
-              </span>
-              <span>{fmt(convertedCash.amount, currency)}</span>
-            </div>
+            {cash.map((c) => (
+              <div key={c.id} className="flex justify-between py-1">
+                <span style={{ color: "#C9BEEA" }}>
+                  {c.name || "Cash"} {c.currency && c.currency !== currency ? `(${c.currency})` : ""}
+                </span>
+                <span>{fmt(convertCurrency(c.amount, c.currency || currency, currency, fxRates), currency)}</span>
+              </div>
+            ))}
             {convertedInvestments
               .filter((i) => i.type !== "house")
               .map((inv, idx) => (
@@ -4713,22 +5844,28 @@ is shown in today's terms.`,
             <span className="absolute left-0 text-[11px]" style={{ color: "#B9ACDD" }}>
               {trAge(language, profile.currentAge)}
             </span>
-            {fiAge != null && fiPct != null && (
+            <span className="absolute right-0 text-[11px]" style={{ color: "#B9ACDD" }}>
+              {trAge(language, profile.lifeExpectancy)}
+            </span>
+          </div>
+          {fiAge != null && fiPct != null && (
+            // deliberately its own row below the age labels — sharing a row and just
+            // shifting horizontally still let this collide with the current-age or
+            // life-expectancy label whenever FI fell near either end of the bar. A
+            // separate row makes an overlap impossible regardless of where FI lands.
+            <div className="relative h-4">
               <span
-                className="absolute text-[11px] font-semibold whitespace-nowrap"
+                className="absolute top-0 text-[11px] font-semibold whitespace-nowrap"
                 style={{
                   left: `${fiPct}%`,
-                  transform: fiPct > 78 ? "translateX(-100%)" : fiPct < 12 ? "translateX(0)" : "translateX(-50%)",
+                  transform: fiPct > 88 ? "translateX(-100%)" : fiPct < 12 ? "translateX(0)" : "translateX(-50%)",
                   color: "#FFC24B",
                 }}
               >
                 🎯 {trFreeAt(language, Math.floor(fiAge))}
               </span>
-            )}
-            <span className="absolute right-0 text-[11px]" style={{ color: "#B9ACDD" }}>
-              {trAge(language, profile.lifeExpectancy)}
-            </span>
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-5 flex gap-2 text-xs flex-wrap">
@@ -4812,6 +5949,33 @@ is shown in today's terms.`,
             </div>
           </div>
 
+          {leverInsight && (
+            <div className="mt-3 rounded-2xl p-3.5 flex items-start gap-2.5" style={{ background: "#FFF8E7" }}>
+              <span className="text-lg leading-none">💡</span>
+              <p className="text-xs leading-relaxed" style={{ color: "#8A5A00" }}>
+                {leverInsight.type === "spend" && (
+                  <>
+                    Spending <strong>{fmt(leverInsight.amount, currency)}/mo less</strong> would get you there{" "}
+                    <strong>{formatDurationShort(leverInsight.deltaDays)} sooner</strong>.
+                  </>
+                )}
+                {leverInsight.type === "save" && (
+                  <>
+                    Saving <strong>{fmt(leverInsight.amount, currency)}/mo more</strong> would get you there{" "}
+                    <strong>{formatDurationShort(leverInsight.deltaDays)} sooner</strong>.
+                  </>
+                )}
+                {leverInsight.type === "returns" && (
+                  <>
+                    If your investments returned <strong>1%/yr more</strong>, you'd get there{" "}
+                    <strong>{formatDurationShort(leverInsight.deltaDays)} sooner</strong> — though that's not
+                    something you can just decide, unlike spending or saving.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+
           <button
             onClick={() => setTab("inputs")}
             className="w-full mt-5 rounded-full py-3.5 font-semibold text-white"
@@ -4856,14 +6020,14 @@ is shown in today's terms.`,
           <div className="px-5 py-5">
             {activeSection === "profile" && (
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Current age">
+                <Field label={tt("Current age")}>
                   <NumberInput
                     accent={SECTION_COLORS.profile}
                     value={profile.currentAge}
                     onChange={(v) => setProfile({ ...profile, currentAge: v })}
                   />
                 </Field>
-                <Field label="Life expectancy">
+                <Field label={tt("Life expectancy")}>
                   <NumberInput
                     accent={SECTION_COLORS.profile}
                     value={profile.lifeExpectancy}
@@ -4878,7 +6042,7 @@ is shown in today's terms.`,
                     </Warn>
                   </div>
                 )}
-                <Field label="Region you live in">
+                <Field label={tt("Region you live in")}>
                   <SelectInput
                     value={profile.region}
                     onChange={(v) => {
@@ -4886,7 +6050,7 @@ is shown in today's terms.`,
                       const newTaxCountry = v === "EU" ? "DE" : v === "US" ? "US_OTHER" : undefined;
                       setProfile({ ...profile, region: v, taxCountry: newTaxCountry, currency: rd.currency });
                       setExpensesState((e) => ({ ...e, inflation: rd.inflation }));
-                      setCash((c) => ({ ...c, rate: rd.cashRate, currency: profile.multiCurrency ? c.currency : rd.currency }));
+                      setCash((prev) => prev.map((c) => ({ ...c, rate: rd.cashRate, currency: profile.multiCurrency ? c.currency : rd.currency })));
                       setInvestments((prev) => prev.map((i) => (i.type === "house" ? i : { ...i, growthRate: rd.marketReturn })));
                       setRetirement((prev) => prev.map((r) => ({ ...r, growthRate: rd.marketReturn })));
                     }}
@@ -4894,7 +6058,7 @@ is shown in today's terms.`,
                   />
                 </Field>
                 {(profile.region === "EU" || profile.region === "US") && (
-                  <Field label={profile.region === "EU" ? "Country (for tax purposes)" : "State (for tax purposes)"}>
+                  <Field label={profile.region === "EU" ? tt("Country (for tax purposes)") : tt("State (for tax purposes)")}>
                     <SelectInput
                       value={profile.taxCountry || (profile.region === "EU" ? "DE" : "US_OTHER")}
                       onChange={(v) => setProfile({ ...profile, taxCountry: v })}
@@ -4902,29 +6066,29 @@ is shown in today's terms.`,
                     />
                   </Field>
                 )}
-                <Field label="Main currency (results are shown in this)">
+                <Field label={tt("Main currency (results are shown in this)")}>
                   <SelectInput
                     value={profile.currency || "EUR"}
                     onChange={(v) => setProfile({ ...profile, currency: v })}
                     options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
                   />
                 </Field>
-                <Field label="Do you hold money in more than one currency?">
+                <Field label={tt("Do you hold money in more than one currency?")}>
                   <SelectInput
                     value={profile.multiCurrency ? "yes" : "no"}
                     onChange={(v) => {
                       const multi = v === "yes";
                       setProfile({ ...profile, multiCurrency: multi });
                       if (!multi) {
-                        setCash((c) => ({ ...c, currency: profile.currency }));
+                        setCash((prev) => prev.map((c) => ({ ...c, currency: profile.currency })));
                         setInvestments((prev) => prev.map((i) => ({ ...i, currency: profile.currency })));
                         setRetirement((prev) => prev.map((r) => ({ ...r, currency: profile.currency })));
                         setWork((w) => ({ ...w, currency: profile.currency }));
                       }
                     }}
                     options={[
-                      { value: "no", label: "No — everything is in one currency" },
-                      { value: "yes", label: "Yes — show currency per account" },
+                      { value: "no", label: tt("No — everything is in one currency") },
+                      { value: "yes", label: tt("Yes — show currency per account") },
                     ]}
                   />
                 </Field>
@@ -4939,7 +6103,7 @@ is shown in today's terms.`,
                     </div>
                   ) : null;
                 })()}
-                <Field label="Average tax rate">
+                <Field label={tt("Average tax rate")}>
                   <SelectInput
                     value={isTaxCountrySupported(resolveTaxCountry(profile)) ? profile.taxMode ?? "manual" : "manual"}
                     onChange={(v) => setProfile({ ...profile, taxMode: v })}
@@ -4947,14 +6111,14 @@ is shown in today's terms.`,
                       isTaxCountrySupported(resolveTaxCountry(profile))
                         ? [
                             { value: "auto", label: `Auto — from ${TAX_TABLES[resolveTaxCountry(profile)]?.label || resolveTaxCountry(profile)}` },
-                            { value: "manual", label: "Set my own number" },
+                            { value: "manual", label: tt("Set my own number") },
                           ]
-                        : [{ value: "manual", label: "Fixed number (no bracket table for this country yet)" }]
+                        : [{ value: "manual", label: tt("Fixed number (no bracket table for this country yet)") }]
                     }
                   />
                 </Field>
                 {(profile.taxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(profile)) ? (
-                  <Field label="Your average tax rate">
+                  <Field label={tt("Your average tax rate")}>
                     <NumberInput
                       accent={SECTION_COLORS.profile}
                       value={profile.taxBracket}
@@ -4963,11 +6127,35 @@ is shown in today's terms.`,
                     />
                   </Field>
                 ) : (
-                  <Field label="Current estimate, at today's salary">
+                  <Field label={tt("Current estimate, at today's salary")}>
                     <div className="rounded-xl bg-white px-4 py-3 text-sm font-semibold shadow-sm" style={{ color: SECTION_COLORS.profile }}>
-                      ~{Math.round(computeOrdinaryTaxRate(resolveTaxCountry(profile), work.salary))}%
+                      ~{Math.round(
+                        computeOrdinaryTaxRate(resolveTaxCountry(profile), work.salary) + computeSalaryAddOnRate(resolveTaxCountry(profile), work.salary)
+                      )}%
                     </div>
                   </Field>
+                )}
+                {(profile.taxMode ?? "manual") === "auto" && isTaxCountrySupported(resolveTaxCountry(profile)) && (
+                  <div className="col-span-2">
+                    <InlineMath
+                      label="Show which brackets this comes from"
+                      math={`${TAX_TABLES[resolveTaxCountry(profile)]?.label || resolveTaxCountry(profile)}\n\nIncome tax brackets:\n${(() => {
+                        const brackets = TAX_TABLES[resolveTaxCountry(profile)]?.ordinary || [];
+                        let lower = 0;
+                        return brackets
+                          .map((b) => {
+                            const line = `  ${fmt(lower, currency)} – ${b.upTo === Infinity ? "up" : fmt(b.upTo, currency)}: ${b.rate}%`;
+                            lower = b.upTo;
+                            return line;
+                          })
+                          .join("\n");
+                      })()}\n\n${(() => {
+                        const addOn = computeSalaryAddOnRate(resolveTaxCountry(profile), work.salary);
+                        if (!addOn) return "";
+                        return `Plus mandatory salary-only contributions (pension,\nunemployment, health insurance...): ~${round2(addOn)}%\nThese apply ONLY to salary, never to a pension, rent,\nor interest — a pension isn't taxed as if it were still\na paycheck.\n\n`;
+                      })()}Your ${Math.round(computeOrdinaryTaxRate(resolveTaxCountry(profile), work.salary) + computeSalaryAddOnRate(resolveTaxCountry(profile), work.salary))}% is the\nAVERAGE combined rate at your income, applied to salary —\nnot the top band's rate. It's recalculated every simulated\nyear from that year's actual income, so it's usually much\nlower once retired (and drops the salary-only part entirely).`}
+                    />
+                  </div>
                 )}
                 {((profile.taxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(profile))) &&
                   (profile.taxBracket > 65 || profile.taxBracket < 0) && (
@@ -4979,7 +6167,7 @@ is shown in today's terms.`,
                       </Warn>
                     </div>
                   )}
-                <Field label="Dividend tax rate">
+                <Field label={tt("Dividend tax rate")}>
                   <SelectInput
                     value={isTaxCountrySupported(resolveTaxCountry(profile)) ? profile.dividendTaxMode ?? "manual" : "manual"}
                     onChange={(v) => setProfile({ ...profile, dividendTaxMode: v })}
@@ -4987,14 +6175,14 @@ is shown in today's terms.`,
                       isTaxCountrySupported(resolveTaxCountry(profile))
                         ? [
                             { value: "auto", label: `Auto — from ${TAX_TABLES[resolveTaxCountry(profile)]?.label || resolveTaxCountry(profile)}` },
-                            { value: "manual", label: "Set my own number" },
+                            { value: "manual", label: tt("Set my own number") },
                           ]
-                        : [{ value: "manual", label: "Fixed number (no bracket table for this country yet)" }]
+                        : [{ value: "manual", label: tt("Fixed number (no bracket table for this country yet)") }]
                     }
                   />
                 </Field>
                 {(profile.dividendTaxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(profile)) ? (
-                  <Field label="Your dividend tax rate">
+                  <Field label={tt("Your dividend tax rate")}>
                     <NumberInput
                       accent={SECTION_COLORS.profile}
                       value={profile.dividendTaxRate ?? profile.taxBracket}
@@ -5003,13 +6191,13 @@ is shown in today's terms.`,
                     />
                   </Field>
                 ) : (
-                  <Field label="Current estimate, at today's salary">
+                  <Field label={tt("Current estimate, at today's salary")}>
                     <div className="rounded-xl bg-white px-4 py-3 text-sm font-semibold shadow-sm" style={{ color: SECTION_COLORS.profile }}>
                       ~{Math.round(computeDividendTaxRate(resolveTaxCountry(profile), work.salary))}%
                     </div>
                   </Field>
                 )}
-                <Field label="Capital gains tax rate">
+                <Field label={tt("Capital gains tax rate")}>
                   <SelectInput
                     value={isTaxCountrySupported(resolveTaxCountry(profile)) ? profile.capitalGainsTaxMode ?? "manual" : "manual"}
                     onChange={(v) => setProfile({ ...profile, capitalGainsTaxMode: v })}
@@ -5017,14 +6205,14 @@ is shown in today's terms.`,
                       isTaxCountrySupported(resolveTaxCountry(profile))
                         ? [
                             { value: "auto", label: `Auto — from ${TAX_TABLES[resolveTaxCountry(profile)]?.label || resolveTaxCountry(profile)} rules` },
-                            { value: "manual", label: "Set my own number" },
+                            { value: "manual", label: tt("Set my own number") },
                           ]
-                        : [{ value: "manual", label: "Fixed number (no bracket table for this country yet)" }]
+                        : [{ value: "manual", label: tt("Fixed number (no bracket table for this country yet)") }]
                     }
                   />
                 </Field>
                 {(profile.capitalGainsTaxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(profile)) ? (
-                  <Field label="Your capital gains tax rate">
+                  <Field label={tt("Your capital gains tax rate")}>
                     <NumberInput
                       accent={SECTION_COLORS.profile}
                       value={profile.capitalGainsTaxRate ?? profile.taxBracket}
@@ -5033,7 +6221,7 @@ is shown in today's terms.`,
                     />
                   </Field>
                 ) : (
-                  <Field label="Current estimate, at today's salary">
+                  <Field label={tt("Current estimate, at today's salary")}>
                     <div className="rounded-xl bg-white px-4 py-3 text-sm font-semibold shadow-sm" style={{ color: SECTION_COLORS.profile }}>
                       ~{Math.round(computeCapitalGainsTaxRate(resolveTaxCountry(profile), work.salary))}%
                     </div>
@@ -5069,7 +6257,7 @@ is shown in today's terms.`,
                   className="text-xs font-semibold rounded-full px-3 py-1.5"
                   style={{ background: `${SECTION_COLORS.profile}1A`, color: SECTION_COLORS.profile }}
                 >
-                  Refresh
+                  {tr("refresh_label", "Refresh")}
                 </button>
               </div>
             )}
@@ -5083,11 +6271,11 @@ is shown in today's terms.`,
 
             {activeSection === "income" && (
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Annual salary (gross)">
+                <Field label={tt("Annual salary (gross)")}>
                   <NumberInput accent={SECTION_COLORS.income} value={work.salary} onChange={(v) => setWork({ ...work, salary: v })} />
                 </Field>
                 {profile.multiCurrency && (
-                  <Field label="Salary currency">
+                  <Field label={tt("Salary currency")}>
                     <SelectInput
                       value={work.currency || currency}
                       onChange={(v) => setWork({ ...work, currency: v })}
@@ -5095,14 +6283,14 @@ is shown in today's terms.`,
                     />
                   </Field>
                 )}
-                <Field label="Years still working">
+                <Field label={tt("Years still working")}>
                   <NumberInput
                     accent={SECTION_COLORS.income}
                     value={work.yearsWorking}
                     onChange={(v) => setWork({ ...work, yearsWorking: v })}
                   />
                 </Field>
-                <Field label="Salary growth">
+                <Field label={tt("Salary growth")}>
                   <NumberInput
                     accent={SECTION_COLORS.income}
                     value={work.salaryGrowth}
@@ -5110,14 +6298,14 @@ is shown in today's terms.`,
                     onChange={(v) => setWork({ ...work, salaryGrowth: v })}
                   />
                 </Field>
-                <Field label="Monthly expenses (non including mortgages)">
+                <Field label={tt("Monthly expenses (non including mortgages)")}>
                   <NumberInput
                     accent={SECTION_COLORS.income}
                     value={expensesState.monthly}
                     onChange={(v) => setExpensesState({ ...expensesState, monthly: v })}
                   />
                 </Field>
-                <Field label="Inflation">
+                <Field label={tt("Inflation")}>
                   <NumberInput
                     accent={SECTION_COLORS.income}
                     value={expensesState.inflation}
@@ -5130,15 +6318,15 @@ is shown in today's terms.`,
 
             {activeSection === "income" && (
               <div className="mt-4">
-                <Field label="Does your spending decline as you age?">
+                <Field label={tt("Does your spending decline as you age?")}>
                   <SelectInput
                     value={expensesState.spendingDecline?.enabled ? "yes" : "no"}
                     onChange={(v) =>
                       setExpensesState({ ...expensesState, spendingDecline: { enabled: v === "yes" } })
                     }
                     options={[
-                      { value: "no", label: "No — same real spending every year" },
-                      { value: "yes", label: "Yes — spending eases off through retirement" },
+                      { value: "no", label: tt("No — same real spending every year") },
+                      { value: "yes", label: tt("Yes — spending eases off through retirement") },
                     ]}
                   />
                 </Field>
@@ -5167,58 +6355,83 @@ is shown in today's terms.`,
 
             {activeSection === "cash" && (
               <div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Cash on hand">
-                    <NumberInput accent={SECTION_COLORS.cash} value={cash.amount} onChange={(v) => setCash({ ...cash, amount: v })} />
-                  </Field>
-                  {profile.multiCurrency && (
-                    <Field label="Currency">
-                      <SelectInput
-                        value={cash.currency || currency}
-                        onChange={(v) => setCash({ ...cash, currency: v })}
-                        options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
-                      />
-                    </Field>
-                  )}
-                  <Field label="Interest rate">
-                    <NumberInput
-                      accent={SECTION_COLORS.cash}
-                      value={cash.rate}
-                      suffix="%/yr"
-                      onChange={(v) => setCash({ ...cash, rate: v })}
-                    />
-                  </Field>
-                </div>
+                {cash.map((c) => (
+                  <div key={c.id} className="rounded-2xl bg-white p-3.5 shadow-sm mb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex-1 mr-2">
+                        <Field label={tt("Name")}>
+                          <TextInput value={c.name} onChange={(v) => updateCashAccount(c.id, { name: v })} />
+                        </Field>
+                      </div>
+                      {cash.length > 1 && (
+                        <button onClick={() => removeCashAccount(c.id)} className="text-stone-300 hover:text-rose-500 shrink-0">
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label={tt("Cash on hand")}>
+                        <NumberInput accent={SECTION_COLORS.cash} value={c.amount} onChange={(v) => updateCashAccount(c.id, { amount: v })} />
+                      </Field>
+                      {profile.multiCurrency && (
+                        <Field label={tt("Currency")}>
+                          <SelectInput
+                            value={c.currency || currency}
+                            onChange={(v) => updateCashAccount(c.id, { currency: v })}
+                            options={SUPPORTED_CURRENCIES.map((cc) => ({ value: cc, label: cc }))}
+                          />
+                        </Field>
+                      )}
+                      <Field label={tt("Interest rate")}>
+                        <NumberInput
+                          accent={SECTION_COLORS.cash}
+                          value={c.rate}
+                          suffix="%/yr"
+                          onChange={(v) => updateCashAccount(c.id, { rate: v })}
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={addCashAccount}
+                  className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
+                  style={{ background: `${SECTION_COLORS.cash}1A`, color: SECTION_COLORS.cash }}
+                >
+                  + {tt("Add another cash account")}
+                </button>
                 <p className="text-xs text-stone-400 -mt-1 mb-1">
                   Defaults to 0% — a regular checking or savings account pays little to nothing almost everywhere
                   today. If you actually have a better rate (a proper savings account, a term account, or — if
                   you're in France — a tax-free Livret A / LDDS, which pays a government-set rate on a capped
-                  balance) just enter it here; that nuance isn't modeled separately, only the flat rate is.
+                  balance) just enter it here; that nuance isn't modeled separately, only the flat rate is. If you
+                  hold cash in more than one currency (say, some EUR and some USD), give each its own account above
+                  — turn on "multiple currencies" in your Profile to set a currency per account.
                 </p>
 
                 <h3 className="text-xs font-semibold uppercase tracking-wide mt-6 mb-1" style={{ color: "#8A81A6" }}>
-                  Where leftover income goes
+                  {tt("Where leftover income goes")}
                 </h3>
                 <p className="text-xs text-stone-400 mb-3">
                   Any surplus after expenses — salary, pension, rent, dividends — splits between cash and an
                   investment, based on how much cash you already hold.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Keep at least">
+                  <Field label={tt("Keep at least")}>
                     <NumberInput
                       accent={SECTION_COLORS.cash}
                       value={savingsRule.minCash}
                       onChange={(v) => setSavingsRule({ ...savingsRule, minCash: v })}
                     />
                   </Field>
-                  <Field label="Keep at most">
+                  <Field label={tt("Keep at most")}>
                     <NumberInput
                       accent={SECTION_COLORS.cash}
                       value={savingsRule.maxCash}
                       onChange={(v) => setSavingsRule({ ...savingsRule, maxCash: v })}
                     />
                   </Field>
-                  <Field label="% of surplus kept as cash">
+                  <Field label={tt("% of surplus kept as cash")}>
                     <NumberInput
                       accent={SECTION_COLORS.cash}
                       value={savingsRule.cashPercent}
@@ -5226,14 +6439,14 @@ is shown in today's terms.`,
                       onChange={(v) => setSavingsRule({ ...savingsRule, cashPercent: v })}
                     />
                   </Field>
-                  <Field label="Rest goes into">
+                  <Field label={tt("Rest goes into")}>
                     <SelectInput
                       value={effectiveSavingsRule.targetInvestmentId || ""}
                       onChange={(v) => setSavingsRule({ ...savingsRule, targetInvestmentId: v })}
                       options={
                         investments.filter((i) => i.type !== "house").length
                           ? investments.filter((i) => i.type !== "house").map((i) => ({ value: i.id, label: i.name || "Investment" }))
-                          : [{ value: "", label: "No investments yet" }]
+                          : [{ value: "", label: tt("No investments yet") }]
                       }
                     />
                   </Field>
@@ -5267,63 +6480,52 @@ is shown in today's terms.`,
                           <Trash2 size={15} />
                         </button>
                       </div>
-                      <Field label="Name">
+                      <Field label={tt("Name")}>
                         <TextInput value={inv.name} onChange={(v) => updateInvestment(inv.id, { name: v })} />
                       </Field>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="Type">
+                        <Field label={tt("Type")}>
                           <SelectInput
                             value={inv.type}
                             onChange={(v) => {
-                              const rd = REGION_DEFAULTS[profile.region] || REGION_DEFAULTS.EU;
+                              const rd = REGION_DEFAULTS[inv.region] || REGION_DEFAULTS.EU;
+                              const oldDefault = defaultGrowthRateForType(rd, inv.type);
                               const patch = { type: v };
                               if (v === "cd" && inv.type !== "cd") {
                                 patch.growthRate = rd.cdRate;
                                 patch.cdLongRunRate = rd.cdRateLongRun;
                                 patch.cdTenorYears = inv.cdTenorYears ?? 1;
+                              } else if (v !== "house" && (inv.growthRate == null || inv.growthRate === oldDefault)) {
+                                patch.growthRate = defaultGrowthRateForType(rd, v);
                               }
-                              if (v !== "cd" && inv.type === "cd") patch.growthRate = rd.marketReturn;
                               updateInvestment(inv.id, patch);
                             }}
                             options={[
-                              { value: "market", label: "Market (growth)" },
-                              { value: "dividend", label: "Dividend-producing" },
-                              { value: "cd", label: "CD / term deposit (fixed rate)" },
-                              { value: "house", label: "House / property" },
+                              { value: "market", label: tt("Market (growth)") },
+                              { value: "dividend", label: tt("Dividend-producing") },
+                              { value: "bond", label: tt("Bond / fixed income") },
+                              { value: "cd", label: tt("CD / term deposit (fixed rate)") },
+                              { value: "house", label: tt("House / property") },
                             ]}
                           />
                         </Field>
-                        <Field label="Region">
-                          <SelectInput
-                            value={inv.region}
-                            onChange={(v) => updateInvestment(inv.id, { region: v })}
-                            options={REGIONS.map((r) => ({ value: r, label: r }))}
-                          />
+                        <Field label={inv.type === "house" ? tt("Current market value") : tt("Current value")}>
+                          <NumberInput accent={color} value={inv.amount} onChange={(v) => updateInvestment(inv.id, { amount: v })} />
                         </Field>
-                        {profile.multiCurrency && (
-                          <Field label="Currency">
-                            <SelectInput
-                              value={inv.currency || currency}
-                              onChange={(v) => updateInvestment(inv.id, { currency: v })}
-                              options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                        {inv.type !== "house" && (
+                          <Field label={inv.type === "dividend" ? tt("Price growth rate") : inv.type === "cd" ? tt("Fixed interest rate (today's rate)") : tt("Growth rate")}>
+                            <NumberInput
+                              accent={color}
+                              value={inv.growthRate}
+                              suffix="%/yr"
+                              onChange={(v) => updateInvestment(inv.id, { growthRate: v })}
                             />
                           </Field>
                         )}
-                        <Field label={inv.type === "house" ? "Current market value" : "Current value"}>
-                          <NumberInput accent={color} value={inv.amount} onChange={(v) => updateInvestment(inv.id, { amount: v })} />
-                        </Field>
-                        <Field label={inv.type === "dividend" ? "Price growth rate" : inv.type === "cd" ? "Fixed interest rate (today's rate)" : "Growth rate"}>
-                          <NumberInput
-                            accent={color}
-                            value={inv.growthRate}
-                            suffix="%/yr"
-                            onChange={(v) => updateInvestment(inv.id, { growthRate: v })}
-                          />
-                        </Field>
                         {(() => {
                           const gr = inv.growthRate;
-                          const hi = inv.type === "cd" ? 12 : inv.type === "house" ? 15 : 20;
-                          const lo = inv.type === "cd" ? 0 : inv.type === "house" ? -10 : -15;
+                          const hi = inv.type === "cd" ? 12 : inv.type === "bond" ? 10 : inv.type === "house" ? 15 : 20;
+                          const lo = inv.type === "cd" ? 0 : inv.type === "bond" ? -8 : inv.type === "house" ? -10 : -15;
                           if (gr > hi) {
                             return (
                               <div className="col-span-2">
@@ -5345,7 +6547,7 @@ is shown in today's terms.`,
                         })()}
                         {inv.type === "cd" && (
                           <>
-                            <Field label="Locked in for">
+                            <Field label={tt("Locked in for")}>
                               <NumberInput
                                 accent={color}
                                 value={inv.cdTenorYears ?? 1}
@@ -5353,7 +6555,7 @@ is shown in today's terms.`,
                                 onChange={(v) => updateInvestment(inv.id, { cdTenorYears: v })}
                               />
                             </Field>
-                            <Field label="Long-run rate (once it converges)">
+                            <Field label={tt("Long-run rate (once it converges)")}>
                               <NumberInput
                                 accent={color}
                                 value={inv.cdLongRunRate ?? Math.max(0, expensesState.inflation - 0.5)}
@@ -5364,13 +6566,19 @@ is shown in today's terms.`,
                           </>
                         )}
                         {inv.type === "cd" && (
-                          <p className="text-xs text-stone-400 col-span-2 -mt-1 mb-2">
-                            Once the lock-in ends, the rate glides down (or up) to the long-run rate over about 5
-                            years — it doesn't stay at today's rate forever. See the Info page for why.
-                          </p>
+                          <div className="col-span-2">
+                            <p className="text-xs text-stone-400 -mt-1 mb-1">
+                              Once the lock-in ends, the rate glides down (or up) to the long-run rate over about 5
+                              years — it doesn't stay at today's rate forever.
+                            </p>
+                            <InlineMath
+                              label="Show the glide-path math"
+                              math={`If yearIndex < lockInYears:\n  rate = today's entered rate (unchanged)\nElse:\n  t = min(1, (yearIndex − lockInYears + 1) / 5)\n  rate = todayRate + (longRunRate − todayRate) × t\n\nSo it moves in equal steps over 5 years after the lock-in\nends, then holds steady at the long-run rate. This one CD:\n  today's rate:    ${inv.growthRate}%/yr\n  long-run rate:   ${inv.cdLongRunRate ?? Math.max(0, expensesState.inflation - 0.5)}%/yr\n  locked in for:   ${inv.cdTenorYears ?? 1} yr${(inv.cdTenorYears ?? 1) === 1 ? "" : "s"}`}
+                            />
+                          </div>
                         )}
                         {inv.type === "dividend" && (
-                          <Field label="Dividend yield">
+                          <Field label={tt("Dividend yield")}>
                             <NumberInput
                               accent={color}
                               value={inv.dividendYield || 0}
@@ -5384,72 +6592,116 @@ is shown in today's terms.`,
                             <Warn>A {inv.dividendYield}% dividend yield is very high — sustained yields this large are rare. Double check this.</Warn>
                           </div>
                         )}
-                        {inv.type !== "house" && (
-                          <Field label="Cost basis (amount originally invested)">
-                            <NumberInput
-                              accent={color}
-                              value={inv.costBasis ?? inv.amount}
-                              onChange={(v) => updateInvestment(inv.id, { costBasis: v })}
-                            />
-                          </Field>
-                        )}
                       </div>
 
                       {inv.type !== "house" && (
-                        <p className="text-xs text-stone-400 -mt-1 mb-2">
-                          Only the gain above this (current value minus cost basis) is taxed when sold.
-                        </p>
-                      )}
-
-                      {inv.type !== "house" && (
                         <div className="grid grid-cols-2 gap-3">
-                          <Field label="Ongoing contribution">
+                          <Field label={tt("Ongoing contribution")}>
                             <NumberInput
                               accent={color}
                               value={inv.contribution || 0}
                               onChange={(v) => updateInvestment(inv.id, { contribution: v })}
                             />
                           </Field>
-                          <Field label="Frequency">
+                          <Field label={tt("Frequency")}>
                             <SelectInput
                               value={inv.contributionFrequency || "monthly"}
                               onChange={(v) => updateInvestment(inv.id, { contributionFrequency: v })}
                               options={[
-                                { value: "monthly", label: "Per month" },
-                                { value: "yearly", label: "Per year" },
+                                { value: "monthly", label: tt("Per month") },
+                                { value: "yearly", label: tt("Per year") },
                               ]}
                             />
                           </Field>
                         </div>
                       )}
 
+                      {inv.type !== "house" && (
+                        <>
+                          <button
+                            onClick={() => setExpandedAdvanced((prev) => ({ ...prev, [inv.id]: !prev[inv.id] }))}
+                            className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 mt-1 mb-2 text-xs font-semibold"
+                            style={{ background: `${color}14`, color }}
+                          >
+                            <span>Advanced — region, currency, cost basis</span>
+                            {expandedAdvanced[inv.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </button>
+                          {expandedAdvanced[inv.id] && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <Field label={tt("Region")}>
+                                <SelectInput
+                                  value={inv.region}
+                                  onChange={(v) => {
+                                    const rd = REGION_DEFAULTS[v] || REGION_DEFAULTS.EU;
+                                    // updates the growth-rate default to match the newly selected region —
+                                    // same pattern as switching investment Type above. Only touches the
+                                    // rate when it still matches the OLD region's default, so a rate someone
+                                    // deliberately typed in themselves is never silently overwritten.
+                                    const oldRd = REGION_DEFAULTS[inv.region] || REGION_DEFAULTS.EU;
+                                    const oldDefault = defaultGrowthRateForType(oldRd, inv.type);
+                                    const patch = { region: v };
+                                    if (inv.type === "cd") {
+                                      if (inv.growthRate === oldDefault) patch.growthRate = rd.cdRate;
+                                      if ((inv.cdLongRunRate ?? oldRd.cdRateLongRun) === oldRd.cdRateLongRun) patch.cdLongRunRate = rd.cdRateLongRun;
+                                    } else if (inv.growthRate === oldDefault) {
+                                      patch.growthRate = defaultGrowthRateForType(rd, inv.type);
+                                    }
+                                    updateInvestment(inv.id, patch);
+                                  }}
+                                  options={REGIONS.map((r) => ({ value: r, label: REGION_DEFAULTS[r]?.label || r }))}
+                                />
+                              </Field>
+                              {profile.multiCurrency && (
+                                <Field label={tt("Currency")}>
+                                  <SelectInput
+                                    value={inv.currency || currency}
+                                    onChange={(v) => updateInvestment(inv.id, { currency: v })}
+                                    options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                                  />
+                                </Field>
+                              )}
+                              <Field label={tt("Cost basis (amount originally invested)")}>
+                                <NumberInput
+                                  accent={color}
+                                  value={inv.costBasis ?? inv.amount}
+                                  onChange={(v) => updateInvestment(inv.id, { costBasis: v })}
+                                />
+                              </Field>
+                              <p className="text-xs text-stone-400 col-span-2 -mt-1 mb-2">
+                                Only the gain above this (current value minus cost basis) is taxed when sold.
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+
                       {inv.type === "house" && (
                         <>
                           <div className="grid grid-cols-2 gap-3">
-                            <Field label="Usage">
+                            <Field label={tt("Usage")}>
                               <SelectInput
                                 value={inv.usage || "primary"}
                                 onChange={(v) => updateInvestment(inv.id, { usage: v })}
                                 options={[
-                                  { value: "primary", label: "Primary residence" },
-                                  { value: "rental", label: "Rented out" },
+                                  { value: "primary", label: tt("Primary residence") },
+                                  { value: "rental", label: tt("Rented out") },
                                 ]}
                               />
                             </Field>
                             {inv.usage === "rental" && (
-                              <Field label="Monthly rent (grows with inflation)">
+                              <Field label={tt("Monthly rent (grows with inflation)")}>
                                 <NumberInput accent={color} value={inv.rent || 0} onChange={(v) => updateInvestment(inv.id, { rent: v })} />
                               </Field>
                             )}
                           </div>
 
-                          <Field label="Can this property be sold to cover expenses?">
+                          <Field label={tt("Can this property be sold to cover expenses?")}>
                             <SelectInput
                               value={inv.sellable === false ? "no" : "yes"}
                               onChange={(v) => updateInvestment(inv.id, { sellable: v === "yes" })}
                               options={[
-                                { value: "yes", label: "Yes — include in withdrawal order" },
-                                { value: "no", label: "No — never sell (e.g. primary home)" },
+                                { value: "yes", label: tt("Yes — include in withdrawal order") },
+                                { value: "no", label: tt("No — never sell (e.g. primary home)") },
                               ]}
                             />
                           </Field>
@@ -5460,7 +6712,7 @@ is shown in today's terms.`,
                             </p>
                           )}
 
-                          <Field label="Mortgage balance remaining">
+                          <Field label={tt("Mortgage balance remaining")}>
                             <NumberInput
                               accent={color}
                               value={inv.mortgageBalance || 0}
@@ -5472,20 +6724,20 @@ is shown in today's terms.`,
                           </p>
 
                           <div className="grid grid-cols-2 gap-3">
-                            <Field label="Monthly mortgage payment (fixed, never inflated)">
+                            <Field label={tt("Monthly mortgage payment (fixed, never inflated)")}>
                               <NumberInput
                                 accent={color}
                                 value={inv.mortgagePayment || 0}
                                 onChange={(v) => updateMortgage(inv, { mortgagePayment: v })}
                               />
                             </Field>
-                            <Field label="Rate type">
+                            <Field label={tt("Rate type")}>
                               <SelectInput
                                 value={inv.mortgageRateType || "fixed"}
                                 onChange={(v) => updateInvestment(inv.id, { mortgageRateType: v })}
                                 options={[
-                                  { value: "fixed", label: "Fixed" },
-                                  { value: "floating", label: "Floating" },
+                                  { value: "fixed", label: tt("Fixed") },
+                                  { value: "floating", label: tt("Floating") },
                                 ]}
                               />
                             </Field>
@@ -5494,7 +6746,7 @@ is shown in today's terms.`,
                           {(() => {
                             const balance = inv.mortgageBalance || 0;
                             if (balance <= 0) return null;
-                            const effRate = (inv.mortgageRateType || "fixed") === "floating" ? cash.rate : inv.mortgageRate || 0;
+                            const effRate = (inv.mortgageRateType || "fixed") === "floating" ? convertedCash.rate : inv.mortgageRate || 0;
                             const annualInterest = balance * (effRate / 100);
                             const annualPayment = (inv.mortgagePayment || 0) * 12;
                             if (annualPayment >= annualInterest) return null;
@@ -5509,7 +6761,7 @@ is shown in today's terms.`,
 
                           {(inv.mortgageRateType || "fixed") === "fixed" ? (
                             <>
-                              <Field label="I know:">
+                              <Field label={tt("I know:")}>
                                 <SelectInput
                                   value={mode}
                                   onChange={(v) => {
@@ -5524,14 +6776,14 @@ is shown in today's terms.`,
                                     }
                                   }}
                                   options={[
-                                    { value: "rate", label: "Interest rate" },
-                                    { value: "years", label: "Years remaining" },
+                                    { value: "rate", label: tt("Interest rate") },
+                                    { value: "years", label: tt("Years remaining") },
                                   ]}
                                 />
                               </Field>
                               {mode === "rate" ? (
                                 <>
-                                  <Field label="Interest rate">
+                                  <Field label={tt("Interest rate")}>
                                     <NumberInput
                                       accent={color}
                                       value={inv.mortgageRate || 0}
@@ -5546,7 +6798,7 @@ is shown in today's terms.`,
                                 </>
                               ) : (
                                 <>
-                                  <Field label="Years remaining">
+                                  <Field label={tt("Years remaining")}>
                                     <NumberInput
                                       accent={color}
                                       value={inv.mortgageYearsLeft || 0}
@@ -5561,10 +6813,31 @@ is shown in today's terms.`,
                           ) : (
                             <p className="text-xs text-stone-400 mb-3">
                               ⚠️ Floating rates aren't actually simulated as changing year to year yet — this is
-                              locked in at today's Cash section interest rate ({cash.rate}%/yr) for the life of the
+                              locked in at today's Cash section interest rate ({convertedCash.rate}%/yr) for the life of the
                               loan, same as a fixed rate. ≈{" "}
-                              {formatYears(solveMortgageYears(inv.mortgageBalance || 0, inv.mortgagePayment || 0, cash.rate))} remaining at that rate.
+                              {formatYears(solveMortgageYears(inv.mortgageBalance || 0, inv.mortgagePayment || 0, convertedCash.rate))} remaining at that rate.
                             </p>
+                          )}
+
+                          {inv.usage === "rental" && (
+                            <>
+                              <Field label={tt("Is mortgage interest tax-deductible against this rent?")}>
+                                <SelectInput
+                                  value={inv.mortgageInterestDeductible ? "yes" : "no"}
+                                  onChange={(v) => updateInvestment(inv.id, { mortgageInterestDeductible: v === "yes" })}
+                                  options={[
+                                    { value: "no", label: tt("No — tax the full rent") },
+                                    { value: "yes", label: tt("Yes — deduct interest before tax") },
+                                  ]}
+                                />
+                              </Field>
+                              <p className="text-xs text-stone-400 -mt-1 mb-3">
+                                Many countries let landlords deduct mortgage <strong>interest</strong> (never
+                                principal) from rental income before tax, but the rules vary by country and by how
+                                the rental is held — so this is off unless you turn it on. Only the interest portion
+                                of each year's payment is deducted, which shrinks as the loan is paid down.
+                              </p>
+                            </>
                           )}
 
                           <button
@@ -5580,21 +6853,37 @@ is shown in today's terms.`,
                             className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 mb-2 text-xs font-semibold"
                             style={{ background: `${color}14`, color }}
                           >
-                            <span>Advanced — purchase price, selling fee, plan after sale</span>
+                            <span>Advanced — region, currency, purchase price, selling fee, plan after sale</span>
                             {expandedAdvanced[inv.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                           </button>
 
                           {expandedAdvanced[inv.id] && (
                             <>
                               <div className="grid grid-cols-2 gap-3">
-                                <Field label="Purchase price (bought value)">
+                                <Field label={tt("Region")}>
+                                  <SelectInput
+                                    value={inv.region}
+                                    onChange={(v) => updateInvestment(inv.id, { region: v })}
+                                    options={REGIONS.map((r) => ({ value: r, label: REGION_DEFAULTS[r]?.label || r }))}
+                                  />
+                                </Field>
+                                {profile.multiCurrency && (
+                                  <Field label={tt("Currency")}>
+                                    <SelectInput
+                                      value={inv.currency || currency}
+                                      onChange={(v) => updateInvestment(inv.id, { currency: v })}
+                                      options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                                    />
+                                  </Field>
+                                )}
+                                <Field label={tt("Purchase price (bought value)")}>
                                   <NumberInput
                                     accent={color}
                                     value={inv.purchasePrice ?? inv.amount}
                                     onChange={(v) => updateInvestment(inv.id, { purchasePrice: v })}
                                   />
                                 </Field>
-                                <Field label="Agency / selling fee">
+                                <Field label={tt("Agency / selling fee")}>
                                   <NumberInput
                                     accent={color}
                                     value={inv.sellingFeePercent ?? 4}
@@ -5615,20 +6904,20 @@ is shown in today's terms.`,
                                 return (
                                   <>
                                     {inv.usage !== "rental" && (
-                                      <Field label="After selling, what happens?">
+                                      <Field label={tt("After selling, what happens?")}>
                                         <SelectInput
                                           value={effAction}
                                           onChange={(v) => updateInvestment(inv.id, { postSaleAction: v })}
                                           options={[
-                                            { value: "rebuy", label: "Buy a new home for a set amount" },
-                                            { value: "resize", label: "Buy something worth a multiple of the sale price" },
-                                            { value: "rent", label: "Rent afterward" },
+                                            { value: "rebuy", label: tt("Buy a new home for a set amount") },
+                                            { value: "resize", label: tt("Buy something worth a multiple of the sale price") },
+                                            { value: "rent", label: tt("Rent afterward") },
                                           ]}
                                         />
                                       </Field>
                                     )}
                                     {inv.usage !== "rental" && effAction === "rebuy" && (
-                                      <Field label="Value of the new home to re-buy">
+                                      <Field label={tt("Value of the new home to re-buy")}>
                                         <NumberInput
                                           accent={color}
                                           value={inv.rebuyValue || 0}
@@ -5637,7 +6926,7 @@ is shown in today's terms.`,
                                       </Field>
                                     )}
                                     {inv.usage !== "rental" && effAction === "resize" && (
-                                      <Field label="Resize factor (0.5 = half, 2 = double)">
+                                      <Field label={tt("Resize factor (0.5 = half, 2 = double)")}>
                                         <NumberInput
                                           accent={color}
                                           value={inv.resizeFactor ?? 1}
@@ -5647,7 +6936,7 @@ is shown in today's terms.`,
                                       </Field>
                                     )}
                                     {inv.usage !== "rental" && effAction === "rent" && (
-                                      <Field label="Monthly rent after the sale (grows with inflation)">
+                                      <Field label={tt("Monthly rent after the sale (grows with inflation)")}>
                                         <NumberInput
                                           accent={color}
                                           value={inv.postSaleRent || 0}
@@ -5657,19 +6946,19 @@ is shown in today's terms.`,
                                     )}
                                     {(inv.usage === "rental" || effAction === "rent") && (
                                       <>
-                                        <Field label="What should happen to the money?">
+                                        <Field label={tt("What should happen to the money?")}>
                                           <SelectInput
                                             value={inv.reinvestAs || "cash"}
                                             onChange={(v) => updateInvestment(inv.id, { reinvestAs: v })}
                                             options={[
-                                              { value: "cash", label: "Keep as cash" },
-                                              { value: "cd", label: "Put it in a CD" },
-                                              { value: "market", label: "Invest it in the market" },
+                                              { value: "cash", label: tt("Keep as cash") },
+                                              { value: "cd", label: tt("Put it in a CD") },
+                                              { value: "market", label: tt("Invest it in the market") },
                                             ]}
                                           />
                                         </Field>
                                         {(inv.reinvestAs === "cd" || inv.reinvestAs === "market") && (
-                                          <Field label={inv.reinvestAs === "cd" ? "CD interest rate" : "Expected market return"}>
+                                          <Field label={inv.reinvestAs === "cd" ? tt("CD interest rate") : tt("Expected market return")}>
                                             <NumberInput
                                               accent={color}
                                               value={inv.reinvestRate || 0}
@@ -5715,7 +7004,7 @@ is shown in today's terms.`,
                 <div className="rounded-xl bg-white p-3.5 mb-4 shadow-sm" style={{ borderLeft: `4px solid ${SECTION_COLORS.retirement}` }}>
                   <div className="flex items-center justify-between mb-1">
                     <div className="text-xs font-semibold" style={{ color: SECTION_COLORS.retirement }}>
-                      State / employer pension
+                      {tr("state_employer_pension", "State / employer pension")}
                     </div>
                     <label className="flex items-center gap-1.5 text-xs text-stone-500">
                       <input
@@ -5723,7 +7012,7 @@ is shown in today's terms.`,
                         checked={pension.enabled !== false}
                         onChange={(e) => setPension({ ...pension, enabled: e.target.checked })}
                       />
-                      I have one
+                      {tr("have_one_button", "I have one")}
                     </label>
                   </div>
                   {pension.enabled !== false ? (
@@ -5732,14 +7021,14 @@ is shown in today's terms.`,
                         A recurring income that kicks in at a set age, as a percentage of your last working salary.
                       </p>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="Starts at age">
+                        <Field label={tt("Starts at age")}>
                           <NumberInput
                             accent={SECTION_COLORS.retirement}
                             value={pension.startAge}
                             onChange={(v) => setPension({ ...pension, startAge: v })}
                           />
                         </Field>
-                        <Field label="% of final salary">
+                        <Field label={tt("% of final salary")}>
                           <NumberInput
                             accent={SECTION_COLORS.retirement}
                             value={pension.percentOfSalary}
@@ -5748,37 +7037,37 @@ is shown in today's terms.`,
                           />
                         </Field>
                       </div>
-                      <Field label="Does it rise with inflation?">
+                      <Field label={tt("Does it rise with inflation?")}>
                         <SelectInput
                           value={pension.indexed ? "yes" : "no"}
                           onChange={(v) => setPension({ ...pension, indexed: v === "yes" })}
                           options={[
-                            { value: "yes", label: "Yes — indexed to inflation (most state pensions)" },
-                            { value: "no", label: "No — fixed amount forever" },
+                            { value: "yes", label: tt("Yes — indexed to inflation (most state pensions)") },
+                            { value: "no", label: tt("No — fixed amount forever") },
                           ]}
                         />
                       </Field>
-                      <Field label="Reduce it if I stop working early?">
+                      <Field label={tt("Reduce it if I stop working early?")}>
                         <SelectInput
                           value={pension.proRata === false ? "no" : "yes"}
                           onChange={(v) => setPension({ ...pension, proRata: v === "yes" })}
                           options={[
-                            { value: "yes", label: "Yes — scale by years contributed (realistic)" },
-                            { value: "no", label: "No — always pay the full amount" },
+                            { value: "yes", label: tt("Yes — scale by years contributed (realistic)") },
+                            { value: "no", label: tt("No — always pay the full amount") },
                           ]}
                         />
                       </Field>
                       {pension.proRata !== false && (
                         <>
                           <div className="grid grid-cols-2 gap-3">
-                            <Field label="I started working at">
+                            <Field label={tt("I started working at")}>
                               <NumberInput
                                 accent={SECTION_COLORS.retirement}
                                 value={pension.careerStartAge ?? 25}
                                 onChange={(v) => setPension({ ...pension, careerStartAge: v })}
                               />
                             </Field>
-                            <Field label="Full pension needs work until">
+                            <Field label={tt("Full pension needs work until")}>
                               <NumberInput
                                 accent={SECTION_COLORS.retirement}
                                 value={pension.fullPensionAge ?? 65}
@@ -5834,23 +7123,14 @@ is shown in today's terms.`,
                           <Trash2 size={15} />
                         </button>
                       </div>
-                      <Field label="Name">
+                      <Field label={tt("Name")}>
                         <TextInput value={r.name} onChange={(v) => updateRetirement(r.id, { name: v })} />
                       </Field>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="Current balance">
+                        <Field label={tt("Current balance")}>
                           <NumberInput accent={color} value={r.amount} onChange={(v) => updateRetirement(r.id, { amount: v })} />
                         </Field>
-                        {profile.multiCurrency && (
-                          <Field label="Currency">
-                            <SelectInput
-                              value={r.currency || currency}
-                              onChange={(v) => updateRetirement(r.id, { currency: v })}
-                              options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
-                            />
-                          </Field>
-                        )}
-                        <Field label="Growth rate">
+                        <Field label={tt("Growth rate")}>
                           <NumberInput
                             accent={color}
                             value={r.growthRate}
@@ -5858,10 +7138,7 @@ is shown in today's terms.`,
                             onChange={(v) => updateRetirement(r.id, { growthRate: v })}
                           />
                         </Field>
-                        <Field label="Minimum withdrawal age">
-                          <NumberInput accent={color} value={r.minAge || 0} onChange={(v) => updateRetirement(r.id, { minAge: v })} />
-                        </Field>
-                        <Field label="Annual contribution">
+                        <Field label={tt("Annual contribution")}>
                           <NumberInput
                             accent={color}
                             value={r.contribution || 0}
@@ -5869,38 +7146,65 @@ is shown in today's terms.`,
                           />
                         </Field>
                       </div>
-                      <Field label="Tax treatment">
+                      <Field label={tt("Tax treatment")}>
                         <SelectInput
                           value={r.taxTreatment || "pretax"}
                           onChange={(v) => updateRetirement(r.id, { taxTreatment: v })}
                           options={[
-                            { value: "pretax", label: "Taxed when withdrawn (e.g. 401(k), traditional IRA)" },
-                            { value: "posttax", label: "Already taxed — tax-free withdrawal (e.g. Roth)" },
+                            { value: "pretax", label: tt("Taxed when withdrawn (e.g. 401(k), traditional IRA)") },
+                            { value: "posttax", label: tt("Already taxed — tax-free withdrawal (e.g. Roth)") },
                           ]}
                         />
                       </Field>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label="Allow withdrawals before minimum age?">
-                          <SelectInput
-                            value={r.earlyAccessAllowed ? "yes" : "no"}
-                            onChange={(v) => updateRetirement(r.id, { earlyAccessAllowed: v === "yes" })}
-                            options={[
-                              { value: "no", label: "No — locked until min. age" },
-                              { value: "yes", label: "Yes — with a penalty" },
-                            ]}
-                          />
-                        </Field>
-                        {r.earlyAccessAllowed && (
-                          <Field label="Early withdrawal penalty">
-                            <NumberInput
-                              accent={color}
-                              value={r.earlyPenalty || 0}
-                              suffix="%"
-                              onChange={(v) => updateRetirement(r.id, { earlyPenalty: v })}
-                            />
-                          </Field>
-                        )}
-                      </div>
+
+                      <button
+                        onClick={() => setExpandedAdvanced((prev) => ({ ...prev, [r.id]: !prev[r.id] }))}
+                        className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 mt-1 mb-2 text-xs font-semibold"
+                        style={{ background: `${color}14`, color }}
+                      >
+                        <span>Advanced — currency, minimum age, early access</span>
+                        {expandedAdvanced[r.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                      {expandedAdvanced[r.id] && (
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            {profile.multiCurrency && (
+                              <Field label={tt("Currency")}>
+                                <SelectInput
+                                  value={r.currency || currency}
+                                  onChange={(v) => updateRetirement(r.id, { currency: v })}
+                                  options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                                />
+                              </Field>
+                            )}
+                            <Field label={tt("Minimum withdrawal age")}>
+                              <NumberInput accent={color} value={r.minAge || 0} onChange={(v) => updateRetirement(r.id, { minAge: v })} />
+                            </Field>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field label={tt("Allow withdrawals before minimum age?")}>
+                              <SelectInput
+                                value={r.earlyAccessAllowed ? "yes" : "no"}
+                                onChange={(v) => updateRetirement(r.id, { earlyAccessAllowed: v === "yes" })}
+                                options={[
+                                  { value: "no", label: tt("No — locked until min. age") },
+                                  { value: "yes", label: tt("Yes — with a penalty") },
+                                ]}
+                              />
+                            </Field>
+                            {r.earlyAccessAllowed && (
+                              <Field label={tt("Early withdrawal penalty")}>
+                                <NumberInput
+                                  accent={color}
+                                  value={r.earlyPenalty || 0}
+                                  suffix="%"
+                                  onChange={(v) => updateRetirement(r.id, { earlyPenalty: v })}
+                                />
+                              </Field>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -5933,25 +7237,25 @@ is shown in today's terms.`,
                           <Trash2 size={15} />
                         </button>
                       </div>
-                      <Field label="Name">
+                      <Field label={tt("Name")}>
                         <TextInput value={ls.name} onChange={(v) => updateLumpSum(ls.id, { name: v })} />
                       </Field>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="At age">
+                        <Field label={tt("At age")}>
                           <NumberInput accent={color} value={ls.age} onChange={(v) => updateLumpSum(ls.id, { age: v })} />
                         </Field>
-                        <Field label="Type">
+                        <Field label={tt("Type")}>
                           <SelectInput
                             value={type}
                             onChange={(v) => updateLumpSum(ls.id, { amount: (v === "pay" ? -1 : 1) * magnitude })}
                             options={[
-                              { value: "receive", label: "Receive" },
-                              { value: "pay", label: "Pay" },
+                              { value: "receive", label: tt("Receive") },
+                              { value: "pay", label: tt("Pay") },
                             ]}
                           />
                         </Field>
                       </div>
-                      <Field label="Amount">
+                      <Field label={tt("Amount")}>
                         <NumberInput
                           accent={color}
                           value={magnitude}
@@ -6037,10 +7341,37 @@ is shown in today's terms.`,
         </div>
       ) : tab === "results" ? (
         <div className="px-5 py-5">
+          {(() => {
+            const target = profile.lifeExpectancy;
+            let kind, params, positive;
+            if (ranOutAge) {
+              kind = "runsOut";
+              params = { age: ranOutAge, yearsShort: Math.max(1, target - ranOutAge), target };
+              positive = false;
+            } else if (fiAge != null) {
+              kind = "stopAt";
+              params = { stopAge: Math.floor(fiAge), target };
+              positive = true;
+            } else {
+              kind = "lasts";
+              params = { target };
+              positive = true;
+            }
+            return (
+              <div
+                className="rounded-2xl p-4 mb-3"
+                style={positive ? { background: "linear-gradient(120deg, #E9FBF2, #EAF3FF)" } : { background: "#FFF1EC" }}
+              >
+                <p className="text-sm font-semibold leading-snug" style={{ color: positive ? "#1B7A4C" : "#B23A22" }}>
+                  {trPlanSummary(language, kind, params)}
+                </p>
+              </div>
+            );
+          })()}
           <div className="rounded-2xl bg-white p-3.5 shadow-sm">
-            <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center justify-between gap-2 mb-2">
               <h2 className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                Balance by bucket, per year
+                {tr("chart_header")}
               </h2>
               <div className="shrink-0 flex rounded-full p-0.5" style={{ background: "#F2EFFB" }}>
                 <button
@@ -6048,34 +7379,53 @@ is shown in today's terms.`,
                   className="rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors"
                   style={!realTermsView ? { background: "white", color: "#4C8DFF", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" } : { color: "#9B93B8" }}
                 >
-                  Future $
+                  {trMoneyToggle(language, currencySymbol(currency), "future")}
                 </button>
                 <button
                   onClick={() => setRealTermsView(true)}
                   className="rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors"
                   style={realTermsView ? { background: "white", color: "#4C8DFF", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" } : { color: "#9B93B8" }}
                 >
-                  Today's $
+                  {trMoneyToggle(language, currencySymbol(currency), "today")}
                 </button>
               </div>
             </div>
-            <p className="text-xs text-stone-400 mb-3">
-              {realTermsView ? (
-                <>
-                  Showing <strong>today's money</strong> — every future year's numbers have inflation stripped back
-                  out, so you can compare them directly to prices today. This is usually the more honest view of
-                  whether you're actually getting ahead.
-                </>
-              ) : (
-                <>
-                  Showing <strong>future dollars</strong> — the actual numbers you'd see in your accounts each year,
-                  growing partly because of inflation, not just real growth. Switch to "Today's $" to strip that
-                  out.
-                </>
-              )}{" "}
-              Tap any point on the chart to see what changed that year.
-              {seriesKeys.includes("Debt") && " Mortgage debt is shown as a red band below zero, not just netted out of a property's equity."}
-            </p>
+            <div className="flex rounded-full p-0.5 mb-2 w-full" style={{ background: "#F2EFFB" }}>
+              {[
+                { id: "total", label: tr("mode_total", "Total") },
+                { id: "assetsVsDebt", label: tr("mode_assets_debt", "Assets vs debt") },
+                { id: "full", label: tr("mode_full", "Full breakdown") },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setChartViewMode(m.id)}
+                  className="flex-1 rounded-full px-2 py-1.5 text-[11px] font-semibold transition-colors"
+                  style={chartViewMode === m.id ? { background: "white", color: "#4C8DFF", boxShadow: "0 1px 2px rgba(0,0,0,0.08)" } : { color: "#9B93B8" }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {/* one short, plain sentence always visible — everything else (the debt-band
+                nuance, the "why does this matter" reasoning, per-mode notes) is one tap
+                away instead of always taking up space */}
+            <p className="text-xs text-stone-500 mb-1">{realTermsView ? tr("chart_short_real") : tr("chart_short_nominal")}</p>
+            <button
+              onClick={() => setShowChartDetails((v) => !v)}
+              className="flex items-center gap-1 text-[11px] font-medium mb-2"
+              style={{ color: "#7C5CFC" }}
+            >
+              {showChartDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {tr("details_label", "Details")}
+            </button>
+            {showChartDetails && (
+              <p className="text-xs text-stone-400 mb-3 -mt-1">
+                {realTermsView ? tr("chart_note_real") : tr("chart_note_nominal")} {tr("chart_tap_hint")}
+                {chartViewMode === "total" && " This line is your net worth — assets minus everything you owe."}
+                {chartViewMode === "assetsVsDebt" && hasMortgageDebt && " Debt is shown as a red band below zero, separate from your assets above it."}
+                {chartViewMode === "full" && seriesKeys.includes("Debt") && ` ${tr("chart_debt_note")}`}
+              </p>
+            )}
             <ResponsiveContainer width="100%" height={340}>
               <AreaChart
                 data={displayYears}
@@ -6086,10 +7436,10 @@ is shown in today's terms.`,
                 style={{ cursor: "pointer" }}
               >
                 <defs>
-                  {seriesKeys.map((key, idx) => (
-                    <linearGradient key={key} id={`fill-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={colorForSeries(key, idx)} stopOpacity={key === "Debt" ? 0.55 : 0.7} />
-                      <stop offset="95%" stopColor={colorForSeries(key, idx)} stopOpacity={key === "Debt" ? 0.15 : 0.08} />
+                  {activeChartSeries.map((s) => (
+                    <linearGradient key={s.key} id={`fill-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={s.color} stopOpacity={s.key === "Debt" ? 0.55 : 0.7} />
+                      <stop offset="95%" stopColor={s.color} stopOpacity={s.key === "Debt" ? 0.15 : 0.08} />
                     </linearGradient>
                   ))}
                 </defs>
@@ -6102,20 +7452,19 @@ is shown in today's terms.`,
                   label={{ value: "Age", position: "insideBottom", offset: -3, fontSize: 11, fill: "#8A81A6" }}
                 />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: "#8A81A6" }} width={45} />
-                <Tooltip content={(props) => <StackedChartTooltip {...props} currency={currency} />} />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 14 }} />
+                <Tooltip content={(props) => <StackedChartTooltip {...props} currency={currency} netWorthLabel={tr("net_worth_label", "Net worth")} />} />
+                {chartViewMode !== "total" && <Legend wrapperStyle={{ fontSize: 11, paddingTop: 14 }} />}
                 <ReferenceLine y={0} stroke="#C9C2E0" strokeWidth={1} />
-                {seriesKeys.map((key, idx) => (
+                {activeChartSeries.map((s) => (
                   <Area
-                    key={key}
+                    key={s.key}
                     type="monotone"
-                    dataKey={key}
-                    name={key === "Debt" ? "Debt (mortgage)" : key}
+                    dataKey={s.key}
+                    name={s.name}
                     stackId="1"
-                    stroke={colorForSeries(key, idx)}
+                    stroke={s.color}
                     strokeWidth={2}
-                    strokeDasharray={key === "Debt" ? "4 3" : undefined}
-                    fill={`url(#fill-${idx})`}
+                    fill={`url(#fill-${s.key})`}
                   />
                 ))}
                 {ranOutAge && (
@@ -6148,13 +7497,13 @@ is shown in today's terms.`,
               {selectedRecord._shortfall && (
                 <>
                   <div className="text-xs font-semibold text-stone-600 mb-1.5">
-                    Why {fmt(selectedRecord._shortfall.total, currency)} was needed — age {selectedAge}
+                    {tr("shortfall_why").replace("{amount}", fmt(selectedRecord._shortfall.total, currency)).replace("{age}", selectedAge)}
                   </div>
                   <table className="w-full text-[11px] text-stone-500 border-collapse">
                     <tbody>
                       <tr className="border-b border-stone-100">
                         <td className="py-1">
-                          Living expenses
+                          {tr("living_expenses_label", "Living expenses")}
                           {selectedRecord._shortfall.spendingDeclinePct > 0 && (
                             <span className="text-stone-400"> (−{selectedRecord._shortfall.spendingDeclinePct}% age-related)</span>
                           )}
@@ -6163,43 +7512,43 @@ is shown in today's terms.`,
                       </tr>
                       {selectedRecord._shortfall.mortgagePaymentDetail.map((m) => (
                         <tr key={m.name} className="border-b border-stone-100">
-                          <td className="py-1">Mortgage — {m.name}</td>
+                          <td className="py-1">{tt("Mortgage")} — {m.name}</td>
                           <td className="py-1 text-right">{fmt(m.annual, currency)}</td>
                         </tr>
                       ))}
                       {selectedRecord._shortfall.postSaleRentExpense > 0 && (
                         <tr className="border-b border-stone-100">
-                          <td className="py-1">Rent (after selling)</td>
+                          <td className="py-1">{tr("shortfall_rent_after_selling", "Rent (after selling)")}</td>
                           <td className="py-1 text-right">{fmt(selectedRecord._shortfall.postSaleRentExpense, currency)}</td>
                         </tr>
                       )}
                       {selectedRecord._shortfall.salary > 0 && (
                         <tr className="border-b border-stone-100">
-                          <td className="py-1">− Salary (after tax)</td>
+                          <td className="py-1">{tr("shortfall_salary", "− Salary (after tax)")}</td>
                           <td className="py-1 text-right">−{fmt(selectedRecord._shortfall.salary, currency)}</td>
                         </tr>
                       )}
                       {selectedRecord._shortfall.pension > 0 && (
                         <tr className="border-b border-stone-100">
-                          <td className="py-1">− Pension (after tax)</td>
+                          <td className="py-1">{tr("shortfall_pension", "− Pension (after tax)")}</td>
                           <td className="py-1 text-right">−{fmt(selectedRecord._shortfall.pension, currency)}</td>
                         </tr>
                       )}
                       {selectedRecord._shortfall.rentIncome > 0 && (
                         <tr className="border-b border-stone-100">
-                          <td className="py-1">− Rent (after tax)</td>
+                          <td className="py-1">{tr("shortfall_rent_income", "− Rent (after tax)")}</td>
                           <td className="py-1 text-right">−{fmt(selectedRecord._shortfall.rentIncome, currency)}</td>
                         </tr>
                       )}
                       {selectedRecord._shortfall.dividendIncome > 0 && (
                         <tr className="border-b border-stone-100">
-                          <td className="py-1">− Dividends (after tax)</td>
+                          <td className="py-1">{tr("shortfall_dividends", "− Dividends (after tax)")}</td>
                           <td className="py-1 text-right">−{fmt(selectedRecord._shortfall.dividendIncome, currency)}</td>
                         </tr>
                       )}
                       {selectedRecord._shortfall.lumpSum !== 0 && (
                         <tr className="border-b border-stone-100">
-                          <td className="py-1">{selectedRecord._shortfall.lumpSum > 0 ? "− Lump sum received" : "+ Lump sum paid out"}</td>
+                          <td className="py-1">{selectedRecord._shortfall.lumpSum > 0 ? tr("shortfall_lump_received", "− Lump sum received") : tr("shortfall_lump_paid", "+ Lump sum paid out")}</td>
                           <td className="py-1 text-right">
                             {selectedRecord._shortfall.lumpSum > 0 ? "−" : "+"}
                             {fmt(Math.abs(selectedRecord._shortfall.lumpSum), currency)}
@@ -6207,7 +7556,7 @@ is shown in today's terms.`,
                         </tr>
                       )}
                       <tr className="font-semibold text-stone-700">
-                        <td className="pt-1.5">= Shortfall to cover</td>
+                        <td className="pt-1.5">{tr("shortfall_total", "= Shortfall to cover")}</td>
                         <td className="pt-1.5 text-right">{fmt(selectedRecord._shortfall.total, currency)}</td>
                       </tr>
                     </tbody>
@@ -6221,17 +7570,14 @@ is shown in today's terms.`,
             <div className="rounded-2xl bg-white p-3.5 shadow-sm mt-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  Age {selectedAge}: year-over-year change
+                  {tr("year_over_year").replace("{age}", selectedAge)}
                 </h3>
                 <button onClick={() => setSelectedAge(null)} className="text-xs text-stone-400 hover:text-stone-600">
-                  Close ✕
+                  {tr("close_label")} ✕
                 </button>
               </div>
               {realTermsView && (
-                <p className="text-[11px] text-stone-400 mb-2 -mt-1">
-                  Balances above are in today's money; the itemized lines below stay in that year's actual (future
-                  dollar) amounts, since they describe specific transactions.
-                </p>
+                <p className="text-[11px] text-stone-400 mb-2 -mt-1">{tr("real_terms_breakdown_note")}</p>
               )}
               {seriesKeys.map((key, idx) => {
                 const color = colorForSeries(key, idx);
@@ -6241,14 +7587,14 @@ is shown in today's terms.`,
                 const detail = selectedRecord._explain ? selectedRecord._explain[key] : null;
                 const lines =
                   key === "Debt"
-                    ? ["Total mortgage balance remaining across all properties — shown negative since it's owed, not held."]
+                    ? [tr("debt_row_note")]
                     : buildExplainLines(detail, currency, key === "Cash" ? selectedRecord._lumpSumEvents : null);
                 return (
                   <div key={key} className="py-2 border-b border-stone-100">
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color }}>
                         <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-                        {key === "Debt" ? "Debt (mortgage)" : key}
+                        {key === "Debt" ? tr("debt_mortgage_label", "Debt (mortgage)") : key}
                       </span>
                       <span className="text-xs font-semibold" style={{ color: delta >= 0 ? "#1B7A4C" : "#B23A22" }}>
                         {delta >= 0 ? "+" : ""}
@@ -6267,7 +7613,7 @@ is shown in today's terms.`,
                 );
               })}
               <div className="flex items-center justify-between pt-3">
-                <span className="text-xs font-bold">Net worth</span>
+                <span className="text-xs font-bold">{tr("net_worth_label", "Net worth")}</span>
                 <span
                   className="text-xs font-bold"
                   style={{ color: displaySelectedRecord._total - (displayPrevRecord?._total || 0) >= 0 ? "#1B7A4C" : "#B23A22" }}
@@ -6285,14 +7631,14 @@ is shown in today's terms.`,
           <div className="grid grid-cols-2 gap-3 mt-4">
             <div className="rounded-2xl bg-white p-3.5 shadow-sm">
               <div className="text-xs text-stone-400">
-                At life expectancy ({profile.lifeExpectancy}){realTermsView && <span className="block">in today's money</span>}
+                {tr("at_life_expectancy", "At life expectancy")} ({profile.lifeExpectancy}){realTermsView && <span className="block">{tr("in_todays_money", "in today's money")}</span>}
               </div>
               <div className="text-lg font-semibold" style={{ color: "#4C8DFF", fontFamily: "'Space Grotesk', sans-serif" }}>
                 {finalYear ? fmt(finalYear._total * realFactorForAge(finalYear.age, profile.currentAge, expensesState.inflation, realTermsView), currency) : "-"}
               </div>
             </div>
             <div className="rounded-2xl bg-white p-3.5 shadow-sm">
-              <div className="text-xs text-stone-400">Years simulated</div>
+              <div className="text-xs text-stone-400">{tr("years_simulated", "Years simulated")}</div>
               <div className="text-lg font-semibold" style={{ color: "#4C8DFF", fontFamily: "'Space Grotesk', sans-serif" }}>
                 {years.length}
               </div>
@@ -6349,61 +7695,69 @@ is shown in today's terms.`,
         </div>
       ) : tab === "whatif" ? (
         <div className="px-5 py-5">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-1.5 mb-1">
             <GitCompare size={16} color="#7C5CFC" />
             <h2 className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              What if…
+              {tr("whatif_title", "What if…")}
             </h2>
+            <button
+              onClick={() => setShowWhatIfIntro((v) => !v)}
+              className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+              style={{ background: "#7C5CFC1A", color: "#7C5CFC" }}
+              aria-label="What is this?"
+            >
+              i
+            </button>
           </div>
-          <p className="text-xs text-stone-400 mb-4">
-            Add as many changes as you like — each starts pre-filled with your current value; edit it to whatever
-            you want to test. Nothing here is saved.
-          </p>
+          {showWhatIfIntro && <p className="text-xs text-stone-400 mb-3">{tr("whatif_intro")}</p>}
+          {!showWhatIfIntro && <div className="mb-3" />}
 
           {whatIfChanges.map((change, idx) => {
             const lever = LEVERS.find((l) => l.id === change.leverId) || LEVERS[0];
             return (
               <div key={change.id} className="rounded-2xl bg-white p-3.5 shadow-sm mb-3">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-stone-400">Change {idx + 1}</span>
+                  <span className="text-xs font-semibold text-stone-400">
+                    {tr("whatif_change_label", "Change")} {idx + 1}
+                  </span>
                   {whatIfChanges.length > 1 && (
                     <button onClick={() => removeWhatIfChange(change.id)} className="text-stone-300 hover:text-rose-500">
                       <Trash2 size={15} />
                     </button>
                   )}
                 </div>
-                <Field label="What changes?">
+                <Field label={tt("What changes?")}>
                   <SelectInput
                     value={change.leverId}
                     onChange={(v) => updateWhatIfChange(change.id, { leverId: v })}
-                    options={LEVERS.map((l) => ({ value: l.id, label: l.label }))}
+                    options={LEVERS.map((l) => ({ value: l.id, label: tt(l.label) }))}
                   />
                 </Field>
                 {change.leverId === "lumpsum" ? (
                   <>
-                    <Field label="Name">
+                    <Field label={tt("Name")}>
                       <TextInput value={change.name || ""} onChange={(v) => updateWhatIfChange(change.id, { name: v })} />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="At age">
+                      <Field label={tt("At age")}>
                         <NumberInput
                           accent="#7C5CFC"
                           value={change.age ?? profile.currentAge}
                           onChange={(v) => updateWhatIfChange(change.id, { age: v })}
                         />
                       </Field>
-                      <Field label="Type">
+                      <Field label={tt("Type")}>
                         <SelectInput
                           value={change.amountType || "receive"}
                           onChange={(v) => updateWhatIfChange(change.id, { amountType: v })}
                           options={[
-                            { value: "receive", label: "Receive" },
-                            { value: "pay", label: "Pay" },
+                            { value: "receive", label: tt("Receive") },
+                            { value: "pay", label: tt("Pay") },
                           ]}
                         />
                       </Field>
                     </div>
-                    <Field label="Amount">
+                    <Field label={tt("Amount")}>
                       <NumberInput
                         accent="#7C5CFC"
                         value={change.amountMagnitude ?? 0}
@@ -6414,36 +7768,38 @@ is shown in today's terms.`,
                     {(Math.round(change.age ?? profile.currentAge) < profile.currentAge ||
                       Math.round(change.age ?? profile.currentAge) > profile.lifeExpectancy) && (
                       <div className="rounded-lg px-2.5 py-2 text-[11px] font-medium" style={{ background: "#FFF1EC", color: "#B23A22" }}>
-                        ⚠️ That age is outside your simulated range ({profile.currentAge}–{profile.lifeExpectancy}), so
-                        this lump sum is being ignored.
+                        ⚠️{" "}
+                        {tr("whatif_lump_out_of_range")
+                          .replace("{min}", profile.currentAge)
+                          .replace("{max}", profile.lifeExpectancy)}
                       </div>
                     )}
                   </>
                 ) : change.leverId === "buyhouse" ? (
                   <>
-                    <Field label="Name">
+                    <Field label={tt("Name")}>
                       <TextInput value={change.name || ""} onChange={(v) => updateWhatIfChange(change.id, { name: v })} />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Property value">
+                      <Field label={tt("Property value")}>
                         <NumberInput accent="#7C5CFC" value={change.value ?? 0} onChange={(v) => updateWhatIfChange(change.id, { value: v })} />
                       </Field>
-                      <Field label="Cash deposit">
+                      <Field label={tt("Cash deposit")}>
                         <NumberInput accent="#7C5CFC" value={change.deposit ?? 0} onChange={(v) => updateWhatIfChange(change.id, { deposit: v })} />
                       </Field>
                     </div>
-                    <Field label="Deposit funded from">
+                    <Field label={tt("Deposit funded from")}>
                       <SelectInput
                         value={change.fundingSource || "cash"}
                         onChange={(v) => updateWhatIfChange(change.id, { fundingSource: v })}
                         options={[
-                          { value: "cash", label: "Cash" },
-                          ...convertedInvestments.filter((i) => i.type !== "house").map((i) => ({ value: i.id, label: i.name || "Investment" })),
+                          { value: "cash", label: tt("Cash") },
+                          ...convertedInvestments.filter((i) => i.type !== "house").map((i) => ({ value: i.id, label: i.name || tt("Investment") })),
                         ]}
                       />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Mortgage rate">
+                      <Field label={tt("Mortgage rate")}>
                         <NumberInput
                           accent="#7C5CFC"
                           value={change.mortgageRate ?? 4.5}
@@ -6451,7 +7807,7 @@ is shown in today's terms.`,
                           onChange={(v) => updateWhatIfChange(change.id, { mortgageRate: v })}
                         />
                       </Field>
-                      <Field label="Loan term">
+                      <Field label={tt("Loan term")}>
                         <NumberInput
                           accent="#7C5CFC"
                           value={change.loanTermYears ?? 25}
@@ -6460,40 +7816,28 @@ is shown in today's terms.`,
                         />
                       </Field>
                     </div>
-                    <Field label="Monthly rent it earns">
+                    <Field label={tt("Monthly rent it earns")}>
                       <NumberInput accent="#7C5CFC" value={change.rent ?? 0} onChange={(v) => updateWhatIfChange(change.id, { rent: v })} />
                     </Field>
-                    <p className="text-xs text-stone-400">
-                      The monthly mortgage payment is calculated for you from the rate and loan term.
-                    </p>
+                    <p className="text-xs text-stone-400">{tr("whatif_mortgage_note")}</p>
                   </>
                 ) : change.leverId === "spendingDecline" ? (
                   <>
-                    <Field label="Spending declines with age?">
+                    <Field label={tt("Spending declines with age?")}>
                       <SelectInput
                         value={change.enabled ? "yes" : "no"}
                         onChange={(v) => updateWhatIfChange(change.id, { enabled: v === "yes" })}
                         options={[
-                          { value: "no", label: "No — same real spending every year" },
-                          { value: "yes", label: "Yes — spending eases off through retirement" },
+                          { value: "no", label: tt("No — same real spending every year") },
+                          { value: "yes", label: tt("Yes — spending eases off through retirement") },
                         ]}
                       />
                     </Field>
-                    <p className="text-xs text-stone-400 leading-relaxed">
-                      Your real plan currently has this {expensesState.spendingDecline?.enabled ? "on" : "off"}.
-                      Living expenses fall ~1%/yr for the first 10 years of retirement, ~2%/yr for the next 9,
-                      then level off — see the Info page for the research behind it.
-                    </p>
+                    <p className="text-xs text-stone-400 leading-relaxed">{tr("whatif_spending_decline_note")}</p>
                   </>
                 ) : (
                   <>
-                    <Field
-                      label={
-                        lever.id === "marketRate" || lever.id === "cdLongRunRate"
-                          ? "New weighted-average rate"
-                          : "New value (starts as your current setting)"
-                      }
-                    >
+                    <Field label={tt(lever.id === "marketRate" || lever.id === "cdLongRunRate" ? "New weighted-average rate" : "New value (starts as your current setting)")}>
                       <NumberInput
                         accent="#7C5CFC"
                         value={change.value}
@@ -6502,33 +7846,19 @@ is shown in today's terms.`,
                       />
                     </Field>
                     {lever.id === "marketRate" && (
-                      <div className="rounded-lg px-2.5 py-2 text-[11px] text-stone-500 leading-relaxed mb-2" style={{ background: "#F7F5FB" }}>
-                        This blends every market/dividend investment and retirement account's own rate, weighted
-                        by balance — cash and CDs have their own separate levers. Today's blend:{" "}
-                        {[
-                          ...convertedInvestments
-                            .filter((i) => i.type !== "house" && i.type !== "cd")
-                            .map((i) => ({ name: i.name || "Investment", rate: i.growthRate, amount: i.amount })),
-                          ...convertedRetirement.map((r) => ({ name: r.name || "Retirement", rate: r.growthRate, amount: r.amount })),
-                        ]
-                          .filter((b) => b.amount > 0)
-                          .map((b) => `${b.name} ${b.rate}%`)
-                          .join(", ") || "no market accounts yet"}{" "}
-                        → weighted avg {round2(weightedAvgMarketRate(baselineDraft))}%. Dragging the number here
-                        shifts every one of those accounts by the same number of points, keeping their relative
-                        spread.
-                      </div>
+                      <p className="text-[11px] text-stone-400 leading-relaxed mb-2">
+                        {tr("whatif_market_rate_note").replace("{rate}", round2(weightedAvgMarketRate(baselineDraft)))}
+                      </p>
+                    )}
+                    {lever.id === "bondRate" && (
+                      <p className="text-[11px] text-stone-400 leading-relaxed mb-2">
+                        {tr("whatif_bond_rate_note").replace("{rate}", round2(weightedAvgBondRate(baselineDraft)))}
+                      </p>
                     )}
                     {lever.id === "cdLongRunRate" && (
-                      <div className="rounded-lg px-2.5 py-2 text-[11px] text-stone-500 leading-relaxed mb-2" style={{ background: "#F7F5FB" }}>
-                        This is the rate each CD glides toward once its lock-in ends — not today's entry rate.
-                        Blended across your CDs, weighted by balance:{" "}
-                        {convertedInvestments
-                          .filter((i) => i.type === "cd" && i.amount > 0)
-                          .map((i) => `${i.name || "CD"} ${round2(i.cdLongRunRate ?? Math.max(0, expensesState.inflation - 0.5))}%`)
-                          .join(", ") || "no CDs yet"}{" "}
-                        → weighted avg {round2(weightedAvgCDLongRun(baselineDraft))}%.
-                      </div>
+                      <p className="text-[11px] text-stone-400 leading-relaxed mb-2">
+                        {tr("whatif_cd_rate_note").replace("{rate}", round2(weightedAvgCDLongRun(baselineDraft)))}
+                      </p>
                     )}
                   </>
                 )}
@@ -6541,41 +7871,41 @@ is shown in today's terms.`,
             className="w-full flex items-center justify-center gap-1.5 rounded-full text-sm font-semibold py-3 mb-4"
             style={{ background: "#7C5CFC1A", color: "#4B2E9E" }}
           >
-            <Plus size={15} /> Add another change
+            <Plus size={15} /> {tt("Add another change")}
           </button>
 
           <div className="rounded-2xl overflow-hidden shadow-sm">
             <div className="grid grid-cols-2 text-xs font-semibold text-white">
               <div className="px-3.5 py-2.5" style={{ background: "#4C8DFF" }}>
-                Today
+                {tt("Today")}
               </div>
               <div className="px-3.5 py-2.5" style={{ background: "#7C5CFC" }}>
-                What if
+                {tt("What if")}
               </div>
             </div>
             <div className="grid grid-cols-2 bg-white">
               <div className="px-3.5 py-3 border-r border-stone-100">
-                <div className="text-xs text-stone-400">Financial independence</div>
+                <div className="text-xs text-stone-400">{tr("fi_label")}</div>
                 <div className="text-base font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  {fiAge != null ? `age ${Math.floor(fiAge)}` : "not reached"}
+                  {fiAge != null ? trAge(language, Math.floor(fiAge)) : tr("fi_not_reached")}
                 </div>
               </div>
               <div className="px-3.5 py-3">
-                <div className="text-xs text-stone-400">Financial independence</div>
+                <div className="text-xs text-stone-400">{tr("fi_label")}</div>
                 <div className="text-base font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  {altFiAge != null ? `age ${Math.floor(altFiAge)}` : "not reached"}
+                  {altFiAge != null ? trAge(language, Math.floor(altFiAge)) : tr("fi_not_reached")}
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-2 bg-white border-t border-stone-100">
               <div className="px-3.5 py-3 border-r border-stone-100">
-                <div className="text-xs text-stone-400">Time until freedom</div>
+                <div className="text-xs text-stone-400">{tr("time_until_freedom", "Time until freedom")}</div>
                 <div className="text-base font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   {formatYMD(yearsToYMD(yearsToFI))}
                 </div>
               </div>
               <div className="px-3.5 py-3">
-                <div className="text-xs text-stone-400">Time until freedom</div>
+                <div className="text-xs text-stone-400">{tr("time_until_freedom", "Time until freedom")}</div>
                 <div className="text-base font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   {formatYMD(yearsToYMD(altYearsToFI))}
                 </div>
@@ -6583,27 +7913,27 @@ is shown in today's terms.`,
             </div>
             <div className="grid grid-cols-2 bg-white border-t border-stone-100">
               <div className="px-3.5 py-3 border-r border-stone-100">
-                <div className="text-xs text-stone-400">Money lasts to</div>
+                <div className="text-xs text-stone-400">{tr("money_lasts_to")}</div>
                 <div className="text-base font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  age {ranOutAge || profile.lifeExpectancy}
+                  {trAge(language, ranOutAge || profile.lifeExpectancy)}
                 </div>
               </div>
               <div className="px-3.5 py-3">
-                <div className="text-xs text-stone-400">Money lasts to</div>
+                <div className="text-xs text-stone-400">{tr("money_lasts_to")}</div>
                 <div className="text-base font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  age {altRanOutAge || profile.lifeExpectancy}
+                  {trAge(language, altRanOutAge || profile.lifeExpectancy)}
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-2 bg-white border-t border-stone-100">
               <div className="px-3.5 py-3 border-r border-stone-100">
-                <div className="text-xs text-stone-400">At life expectancy</div>
+                <div className="text-xs text-stone-400">{tr("at_life_expectancy", "At life expectancy")}</div>
                 <div className="text-base font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   {finalYear ? fmt(finalYear._total, currency) : "-"}
                 </div>
               </div>
               <div className="px-3.5 py-3">
-                <div className="text-xs text-stone-400">At life expectancy</div>
+                <div className="text-xs text-stone-400">{tr("at_life_expectancy", "At life expectancy")}</div>
                 <div className="text-base font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   {altFinalYear ? fmt(altFinalYear._total, currency) : "-"}
                 </div>
@@ -6618,9 +7948,7 @@ is shown in today's terms.`,
                 className="mt-4 rounded-2xl px-4 py-3.5 text-sm font-semibold"
                 style={fiDeltaDays > 0 ? { background: "#FFF1EC", color: "#B23A22" } : { background: "#E9FBF2", color: "#1B7A4C" }}
               >
-                {fiDeltaDays > 0
-                  ? `That scenario costs you ${formatYMD(daysToYMD(fiDeltaDays))} of freedom.`
-                  : `That scenario buys you ${formatYMD(daysToYMD(Math.abs(fiDeltaDays)))} of freedom!`}
+                {trScenarioDelta(language, formatYMD(daysToYMD(Math.abs(fiDeltaDays))), fiDeltaDays > 0)}
               </div>
             )
           ) : (
@@ -6635,26 +7963,29 @@ is shown in today's terms.`,
                     : { background: "#FFF1EC", color: "#B23A22" }
                 }
               >
-                Your money lasts either way — but you'd end up with{" "}
-                {fmt(Math.abs(altFinalYear._total - finalYear._total), currency)}{" "}
-                {altFinalYear._total >= finalYear._total ? "more" : "less"} by age {profile.lifeExpectancy}.
+                {trMoneyEitherWay(
+                  language,
+                  fmt(Math.abs(altFinalYear._total - finalYear._total), currency),
+                  tt(altFinalYear._total >= finalYear._total ? "more" : "less"),
+                  profile.lifeExpectancy
+                )}
               </div>
             )
           )}
 
           <div className="rounded-2xl bg-white p-3.5 shadow-sm mt-4">
             <h2 className="text-sm font-semibold mb-3" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              Total net worth over time
+              {tt("Total net worth over time")}
             </h2>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={comparisonData} margin={{ top: 5, right: 5, left: 0, bottom: 12 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#EEE9F7" />
                 <XAxis dataKey="age" tick={{ fontSize: 11, fill: "#8A81A6" }} label={{ value: "Age", position: "insideBottom", offset: -3, fontSize: 11, fill: "#8A81A6" }} />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: "#8A81A6" }} width={45} />
-                <Tooltip formatter={(v) => (v == null ? "—" : fmt(v, currency))} labelFormatter={(l) => `Age ${l}`} />
+                <Tooltip formatter={(v) => (v == null ? "—" : fmt(v, currency))} labelFormatter={(l) => `${trAge(language, l)}`} />
                 <Legend wrapperStyle={{ fontSize: 11, paddingTop: 14 }} />
-                <Line type="monotone" dataKey="Today" stroke="#4C8DFF" strokeWidth={2.5} dot={false} connectNulls />
-                <Line type="monotone" dataKey="What if" stroke="#7C5CFC" strokeWidth={2.5} strokeDasharray="5 3" dot={false} connectNulls />
+                <Line type="monotone" dataKey="Today" name={tt("Today")} stroke="#4C8DFF" strokeWidth={2.5} dot={false} connectNulls />
+                <Line type="monotone" dataKey="What if" name={tt("What if")} stroke="#7C5CFC" strokeWidth={2.5} strokeDasharray="5 3" dot={false} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>
