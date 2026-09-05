@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  AreaChart, Area, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine
 } from "recharts";
 import {
@@ -49,7 +49,7 @@ const PHRASES = {
   "Average tax rate": { fr: "Taux d'imposition moyen", it: "Aliquota fiscale media" },
   "Balance today": { fr: "Solde actuel", it: "Saldo attuale" },
   "Buy a new home for a set amount": { fr: "Acheter un nouveau logement pour un montant fixe", it: "Comprare una nuova casa per un importo fisso" },
-  "Buy something worth a multiple of the sale price": { fr: "Acheter un bien valant un multiple du prix de vente", it: "Comprare qualcosa che vale un multiplo del prezzo di vendita" },
+  "Buy a smaller property": { fr: "Acheter un bien plus petit", it: "Comprare un immobile più piccolo" },
   "CD / term deposit (fixed rate)": { fr: "Dépôt à terme (taux fixe)", it: "Deposito vincolato (tasso fisso)" },
   "Can this property be sold to cover expenses?": { fr: "Ce bien peut-il être vendu pour couvrir des dépenses ?", it: "Questo immobile può essere venduto per coprire le spese?" },
   "Capital gains tax rate": { fr: "Taux d'imposition sur les plus-values", it: "Aliquota fiscale sulle plusvalenze" },
@@ -195,6 +195,24 @@ const PHRASES = {
   "Add another property": { fr: "Ajouter un autre bien", it: "Aggiungi un altro immobile" },
   "CD interest rate": { fr: "Taux du dépôt à terme", it: "Tasso del deposito vincolato" },
   "Where leftover income goes": { fr: "Où va l'argent restant", it: "Dove va il reddito residuo" },
+  "Does this have a mortgage?": { fr: "Y a-t-il un prêt immobilier ?", it: "C'è un mutuo su questo immobile?" },
+  "No — owned outright": { fr: "Non — entièrement payé", it: "No — di piena proprietà" },
+  "Yes — still paying it off": { fr: "Oui — encore en cours de remboursement", it: "Sì — lo sto ancora pagando" },
+  "Investments": { fr: "Investissements", it: "Investimenti" },
+  "Properties": { fr: "Biens immobiliers", it: "Immobili" },
+  "Pension": { fr: "Retraite", it: "Pensione" },
+  "Assets": { fr: "Actifs", it: "Attivi" },
+  "Debt (mortgage)": { fr: "Dette (prêt immobilier)", it: "Debito (mutuo)" },
+  "All categories": { fr: "Toutes les catégories", it: "Tutte le categorie" },
+  "show split": { fr: "voir le détail", it: "vedi dettaglio" },
+  "of your salary, in total": { fr: "de votre salaire, au total", it: "del tuo stipendio, in totale" },
+  "then": { fr: "puis", it: "poi" },
+  "income tax on what's left": { fr: "d'impôt sur le revenu sur ce qui reste", it: "di imposta sul reddito su ciò che resta" },
+  "social charges": { fr: "de charges sociales", it: "di contributi sociali" },
+  "Social charges apply to salary only — not to a pension, rent, or interest.": {
+    fr: "Les charges sociales s'appliquent au salaire uniquement — pas à une pension, un loyer ou des intérêts.",
+    it: "I contributi sociali si applicano solo allo stipendio — non a pensione, affitto o interessi.",
+  },
 };
 const STRINGS = {
   en: {
@@ -268,7 +286,8 @@ const STRINGS = {
     mode_total: "Total",
     time_until_freedom: "Time until freedom",
     mode_assets_debt: "Assets vs debt",
-    mode_full: "Full breakdown",
+    mode_full: "Breakdown",
+    chart_total_note: "The thick green line is your net worth — everything you own, minus everything you owe.",
     whatif_title: "What if…",
     whatif_intro: "Add as many changes as you like — each starts pre-filled with your current value; edit it to whatever you want to test. Nothing here is saved.",
     whatif_change_label: "Change",
@@ -384,7 +403,8 @@ const STRINGS = {
     mode_total: "Total",
     time_until_freedom: "Temps avant la liberté",
     mode_assets_debt: "Actifs vs dette",
-    mode_full: "Détail complet",
+    mode_full: "Détail",
+    chart_total_note: "La ligne verte épaisse est votre patrimoine net — tout ce que vous possédez, moins tout ce que vous devez.",
     whatif_title: "Et si…",
     whatif_intro: "Ajoutez autant de changements que vous voulez — chacun démarre avec votre valeur actuelle ; modifiez-la pour tester ce que vous voulez. Rien n'est enregistré ici.",
     whatif_change_label: "Changement",
@@ -500,7 +520,8 @@ const STRINGS = {
     mode_total: "Totale",
     time_until_freedom: "Tempo all'indipendenza",
     mode_assets_debt: "Attivi vs debito",
-    mode_full: "Dettaglio completo",
+    mode_full: "Dettaglio",
+    chart_total_note: "La linea verde spessa è il tuo patrimonio netto — tutto ciò che possiedi, meno tutto ciò che devi.",
     whatif_title: "E se…",
     whatif_intro: "Aggiungi tutti i cambiamenti che vuoi — ognuno parte già impostato sul tuo valore attuale; modificalo per testare quello che vuoi. Niente qui viene salvato.",
     whatif_change_label: "Cambiamento",
@@ -1094,6 +1115,10 @@ const TAX_TABLES = {
     // ~23% is a representative single, non-cadre figure; real French payroll deductions
     // are somewhat banded and vary by sector, so this is a round approximation.
     salaryOnlyAddOn: 23,
+    // "abattement de 10% pour frais professionnels" — a standard deduction applied to
+    // salary before income tax is calculated, capped per person
+    salaryDeductionPct: 10,
+    salaryDeductionCap: 14171,
     // Prélèvement Forfaitaire Unique (PFU / "flat tax"): 12.8% income tax + 17.2%
     // social contributions = 30% flat on dividends AND interest, regardless of
     // income level (an income-tax-barème option also exists but PFU is the default
@@ -1114,6 +1139,9 @@ const TAX_TABLES = {
     // mandatory Sozialversicherung (pension ~9.3%, unemployment ~1.3%, health ~8.05%,
     // long-term care ~1.8-2.3%) — salary only, same reasoning as France above
     salaryOnlyAddOn: 20,
+    // Werbungskostenpauschbetrag — flat employee expenses allowance
+    salaryDeductionPct: 0,
+    salaryDeductionFlat: 1230,
     // flat "Abgeltungsteuer" (25%) + solidarity surcharge (5.5% of the tax) = 26.375%,
     // applied to interest and dividends alike regardless of income level
     dividend: [{ upTo: Infinity, rate: 26.375 }],
@@ -1336,6 +1364,25 @@ function computeSalaryAddOnRate(taxCountry, grossSalary) {
   return addOn;
 }
 
+// The part of a gross salary that income tax is actually levied on.
+//
+// Income tax and social charges are NOT two rates you add together and apply to the
+// gross — they stack SEQUENTIALLY. Mandatory social contributions come off first, then
+// income tax is charged on what's left (less any standard employee-expenses allowance).
+// Adding the rates instead materially over-taxes: a €750k French salary came out at
+// ~65% total tax when the correct figure is ~54%.
+function taxableSalaryPortion(taxCountry, grossSalary) {
+  const table = TAX_TABLES[taxCountry] || TAX_TABLES.GENERIC_OTHER;
+  const afterSocial = Math.max(0, grossSalary * (1 - computeSalaryAddOnRate(taxCountry, grossSalary) / 100));
+  let deduction = 0;
+  if (table.salaryDeductionPct) {
+    deduction = afterSocial * (table.salaryDeductionPct / 100);
+    if (table.salaryDeductionCap) deduction = Math.min(deduction, table.salaryDeductionCap);
+  }
+  if (table.salaryDeductionFlat) deduction = Math.max(deduction, table.salaryDeductionFlat);
+  return { afterSocial, taxable: Math.max(0, afterSocial - deduction) };
+}
+
 function computeDividendTaxRate(taxCountry, ordinaryIncome) {
   const table = TAX_TABLES[taxCountry] || TAX_TABLES.GENERIC_OTHER;
   if (taxCountry === "UK") {
@@ -1379,6 +1426,25 @@ const UK_CAPITAL_GAINS_BANDS = [
   { upTo: Infinity, rate: 24 }, // higher-rate taxpayer
 ];
 const CA_CAPITAL_GAINS_INCLUSION_RATE = 0.5;
+
+// Earliest age a tax-advantaged retirement account can normally be drawn without a
+// penalty — varies a lot by country, so a flat "60" was wrong nearly everywhere.
+// Deliberately approximate: real rules have carve-outs (US rule of 55, UK protected
+// pension ages, French carrière longue...) that aren't modeled. Editable per account.
+const RETIREMENT_MIN_AGE = {
+  FR: 62, // légal minimum, rising toward 64
+  DE: 63, // earliest with deductions; 67 for full
+  IT: 64, // "pensione anticipata" territory
+  ES: 63, // early retirement floor
+  UK: 55, // private pensions; rises to 57 in 2028
+  US_NY: 59, // 59½ for IRA/401(k), rounded down
+  US_OTHER: 59,
+  CA: 60, // earliest CPP; RRSPs have no hard floor
+  GENERIC_OTHER: 60,
+};
+function defaultRetirementMinAge(taxCountry) {
+  return RETIREMENT_MIN_AGE[taxCountry] ?? 60;
+}
 
 function computeCapitalGainsTaxRate(taxCountry, ordinaryIncome) {
   const treatment = CAPITAL_GAINS_TREATMENT[taxCountry] || "sameAsDividend";
@@ -1637,7 +1703,17 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
       cdGrossRateById[inv.id] = cdGrossRate;
       cdGrossInterestTotal += inv.amount * (cdGrossRate / 100);
     });
-    const totalOrdinaryGrossIncome = grossSalary + pensionGross + taxableRentTotal + cashInterestGross + cdGrossInterestTotal;
+    // Income tax is levied on salary AFTER mandatory social contributions and the
+    // standard employee-expenses allowance — not on the raw gross. Building the tax
+    // base from the gross (and then also subtracting social charges as a separate rate)
+    // double-counts and badly over-taxes high salaries.
+    const taxCountry = resolveTaxCountry(profile);
+    const taxCountrySupported = isTaxCountrySupported(taxCountry);
+    const taxMode = taxCountrySupported ? profile.taxMode ?? "manual" : "manual"; // old saved profiles predate this field
+    const salaryAddOnRateThisYear = taxMode === "manual" ? 0 : computeSalaryAddOnRate(taxCountry, grossSalary);
+    const { afterSocial: salaryAfterSocial, taxable: taxableSalary } =
+      taxMode === "manual" ? { afterSocial: grossSalary, taxable: grossSalary } : taxableSalaryPortion(taxCountry, grossSalary);
+    const totalOrdinaryGrossIncome = taxableSalary + pensionGross + taxableRentTotal + cashInterestGross + cdGrossInterestTotal;
 
     // Either the progressive rate implied by this region's bracket table at this year's
     // actual income (the default, "auto" mode — so it naturally drops once retired and
@@ -1649,9 +1725,6 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
     // "auto" only works for a country with a real bracket table — an unsupported EU
     // country falls back to manual automatically, using whatever fixed number was
     // seeded when the country was chosen (it won't move with income like the rest do).
-    const taxCountry = resolveTaxCountry(profile);
-    const taxCountrySupported = isTaxCountrySupported(taxCountry);
-    const taxMode = taxCountrySupported ? profile.taxMode ?? "manual" : "manual"; // old saved profiles predate this field
     const taxRateThisYear = taxMode === "manual" ? profile.taxBracket ?? 24 : computeOrdinaryTaxRate(taxCountry, totalOrdinaryGrossIncome);
     const dividendTaxMode = taxCountrySupported ? profile.dividendTaxMode ?? "manual" : "manual";
     const dividendRateThisYear =
@@ -1667,12 +1740,9 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
         ? profile.capitalGainsTaxRate ?? profile.taxBracket ?? 24
         : computeCapitalGainsTaxRate(taxCountry, totalOrdinaryGrossIncome);
 
-    // mandatory employee social-insurance contributions (NI, cotisations sociales,
-    // Sozialversicherung, FICA...) — only in "auto" mode, since a manual flat rate is
-    // assumed to already represent someone's real total deduction. Salary-only: a
-    // pension, rent, or interest never has this taken out of it.
-    const salaryAddOnRateThisYear = taxMode === "manual" ? 0 : computeSalaryAddOnRate(taxCountry, grossSalary);
-    const netSalary = grossSalary * (1 - (taxRateThisYear + salaryAddOnRateThisYear) / 100);
+    // Social charges already came off in salaryAfterSocial; income tax is then applied
+    // to that remainder — sequential, not two rates summed against the gross.
+    const netSalary = salaryAfterSocial * (1 - taxRateThisYear / 100);
     const netPension = pensionGross * (1 - taxRateThisYear / 100);
 
     let extraIncome = 0;
@@ -2037,16 +2107,30 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
             shortfall -= applied;
             const leftover = cashFromSale - applied;
             if ((inv.reinvestAs === "cd" || inv.reinvestAs === "market") && leftover > 0) {
+              // If no explicit reinvest rate was entered, fall back to the region's
+              // default for that asset class rather than 0%/yr — someone who chose
+              // "use the defaults" shouldn't silently get sale proceeds earning nothing.
+              const rdReinvest = REGION_DEFAULTS[inv.region] || REGION_DEFAULTS.EU;
+              const effectiveReinvestRate =
+                inv.reinvestRate != null && inv.reinvestRate !== 0
+                  ? inv.reinvestRate
+                  : inv.reinvestAs === "cd"
+                  ? rdReinvest.cdRate
+                  : rdReinvest.marketReturn;
               inv.amount = leftover;
-              inv.type = "market";
-              inv.growthRate = inv.reinvestRate || 0;
+              inv.type = inv.reinvestAs === "cd" ? "cd" : "market";
+              inv.growthRate = effectiveReinvestRate;
+              if (inv.reinvestAs === "cd") {
+                inv.cdTenorYears = inv.cdTenorYears ?? 1;
+                inv.cdLongRunRate = inv.cdLongRunRate ?? rdReinvest.cdRateLongRun;
+              }
               inv.mortgageBalance = 0;
               // these proceeds have already been taxed on sale — set the cost basis to the
               // amount reinvested so only FUTURE growth is taxable from here on
               inv.costBasis = leftover;
               saleNote.reinvestedAs = inv.reinvestAs;
               saleNote.reinvestedAmount = leftover;
-              saleNote.reinvestRate = inv.reinvestRate || 0;
+              saleNote.reinvestRate = effectiveReinvestRate;
             } else {
               inv.amount = 0;
               inv.mortgageBalance = 0;
@@ -2189,6 +2273,12 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
       invBal.reduce((s, i) => s + Math.max(i.amount, 0), 0) +
       retBal.reduce((s, r) => s + Math.max(r.amount, 0), 0);
     record._totalDebt = totalMortgageDebt;
+    // Grouped category totals — what the "breakdown" chart shows by default, instead of
+    // one band per individual account (unreadable once someone has more than three or
+    // four). The per-account keys above are still there for drilling into one group.
+    record._grpInvestments = invBal.reduce((s, i) => s + (i.type !== "house" ? Math.max(i.amount, 0) : 0), 0);
+    record._grpProperties = invBal.reduce((s, i) => s + (i.type === "house" ? Math.max(i.amount, 0) : 0), 0);
+    record._grpRetirement = retBal.reduce((s, r) => s + Math.max(r.amount, 0), 0);
     // Net worth = gross assets MINUS all mortgage debt. Deliberately NOT the sum of the
     // clamped per-bucket equity values used for the chart bands above: those floor at zero
     // so a stacked area chart can render them, which silently hid negative equity and
@@ -2870,7 +2960,7 @@ const WIZARD_DEFAULTS = {
       sellable: false,
       postSaleAction: "rent",
       rebuyValue: 0,
-      resizeFactor: 1,
+      resizeFactor: 0.5,
       postSaleRent: 0,
       sellingFeePercent: 4,
     },
@@ -3003,6 +3093,14 @@ export default function RetirementCalculator() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStarted, setOnboardingStarted] = useState(false);
   const [wizardStepIndex, setWizardStepIndex] = useState(0);
+  // whether the current onboarding question's explanatory note is expanded — collapsed
+  // behind an (i) so the questions themselves stay short, and reset on every step change
+  const [showStepNote, setShowStepNote] = useState(false);
+  // collapse the note again whenever we move to a different question, so it doesn't
+  // stay stuck open from a previous step
+  useEffect(() => {
+    setShowStepNote(false);
+  }, [wizardStepIndex]);
   const [wizardAnswers, setWizardAnswers] = useState(() => detectWizardDefaults());
   const [toast, setToast] = useState("");
   const [bigCelebration, setBigCelebration] = useState(null);
@@ -3061,6 +3159,7 @@ export default function RetirementCalculator() {
   // dashed debt line were confusing without a legend explaining them), or "full" (every
   // account broken out, the original view). Defaults to the simplest one.
   const [chartViewMode, setChartViewMode] = useState("total");
+  const [chartDrilldown, setChartDrilldown] = useState(null); // null = show all four groups
   const [showChartDetails, setShowChartDetails] = useState(false); // Results tab: long explanation collapsed by default
   const [showWhatIfIntro, setShowWhatIfIntro] = useState(false); // What-If tab: explanation collapsed behind an (i)
   const [fxRates, setFxRates] = useState(FX_FALLBACK);
@@ -3294,9 +3393,24 @@ export default function RetirementCalculator() {
       });
     }
     if (a.ownsHome) {
-      a.housesList.forEach((item) => {
+      // Rentals are sold BEFORE the primary residence by default — the home you actually
+      // live in should be the last thing tapped, not the first. Previously houses were
+      // pushed in raw list order, and the wizard's default list puts "Primary home"
+      // first, so the primary got sold ahead of rentals.
+      const orderedHouses = [...a.housesList].sort((x, y) => {
+        const xPrimary = (x.usage || "primary") !== "rental" ? 1 : 0;
+        const yPrimary = (y.usage || "primary") !== "rental" ? 1 : 0;
+        return xPrimary - yPrimary;
+      });
+      orderedHouses.forEach((item) => {
         const isPrimary = (item.usage || "primary") !== "rental";
         const sellable = item.sellable !== undefined ? item.sellable : !isPrimary;
+        const hasMortgage = !!item.hasMortgage && (item.mortgageBalance || 0) > 0;
+        const mortgageRate = item.mortgageRate ?? 4.5;
+        // derive the remaining term from the actual balance/payment/rate rather than
+        // assuming a flat 20 years — a hardcoded number here would silently become the
+        // authoritative input the moment someone switches to "I know: years" mode
+        const impliedYears = hasMortgage ? solveMortgageYears(item.mortgageBalance || 0, item.mortgagePayment || 0, mortgageRate) : 0;
         newInvestments.push({
           id: item.id,
           name: item.name || (isPrimary ? "Primary Home" : "Property"),
@@ -3309,16 +3423,19 @@ export default function RetirementCalculator() {
           sellable,
           postSaleAction: sellable ? item.postSaleAction || "none" : "none",
           rebuyValue: item.rebuyValue || 0,
-          resizeFactor: item.resizeFactor ?? 1,
+          resizeFactor: item.resizeFactor ?? 0.5,
           postSaleRent: item.postSaleRent || 0,
           sellingFeePercent: item.sellingFeePercent ?? 4,
-          purchasePrice: Math.round((item.value || 0) * 0.7),
-          mortgageBalance: item.mortgageBalance || 0,
-          mortgagePayment: item.mortgagePayment || 0,
-          mortgageRateType: "fixed",
+          // default the cost basis to the CURRENT value (i.e. no built-in gain) rather
+          // than inventing one. The old `value * 0.7` silently baked in a 30% capital
+          // gain that got taxed on sale, with nothing telling the person it was there.
+          purchasePrice: item.purchasePrice ?? item.value ?? 0,
+          mortgageBalance: hasMortgage ? item.mortgageBalance || 0 : 0,
+          mortgagePayment: hasMortgage ? item.mortgagePayment || 0 : 0,
+          mortgageRateType: item.mortgageRateType || "fixed",
           mortgageInputMode: item.mortgageInputMode || "rate",
-          mortgageRate: item.mortgageRate ?? 4.5,
-          mortgageYearsLeft: item.mortgageYearsLeft || 20,
+          mortgageRate,
+          mortgageYearsLeft: item.mortgageYearsLeft ?? (isFinite(impliedYears) ? round2(impliedYears) : 20),
           rent: isPrimary ? 0 : item.rent || 0,
         });
         if (sellable) newOrder.push(`house:${item.id}`);
@@ -3336,7 +3453,7 @@ export default function RetirementCalculator() {
           amount: item.balance || 0,
           growthRate: item.growthRate ?? rd.marketReturn,
           contribution: item.contribution || 0,
-          minAge: item.minAge ?? 60,
+          minAge: item.minAge ?? defaultRetirementMinAge(resolvedTC),
           taxTreatment: item.taxTreatment || "pretax",
           earlyAccessAllowed: false,
           earlyPenalty: 10,
@@ -3729,21 +3846,50 @@ export default function RetirementCalculator() {
     // any actual asset bucket — it gets a fixed red color of its own (see colorForSeries)
     return hasMortgageDebt ? ["Cash", ...invNames, ...retNames, "Debt"] : ["Cash", ...invNames, ...retNames];
   }, [investments, retirement]);
-  const colorForSeries = (key, idx) => (key === "Debt" ? "#FF6B5B" : PALETTE[idx % PALETTE.length]);
   const hasMortgageDebt = seriesKeys.includes("Debt");
-  // the three chart modes, each a list of {key, name, color} pulled from the SAME
-  // underlying per-year data (deflateRecord etc. already put _total/_grossAssets/Debt/
-  // each bucket on every row) — switching modes never changes the numbers, only which
-  // of them are drawn
-  const chartSeriesForMode = {
-    total: [{ key: "_total", name: tr("net_worth_label", "Net worth"), color: "#3DDC97" }],
-    assetsVsDebt: [
-      { key: "_grossAssets", name: "Assets", color: "#4C8DFF" },
-      ...(hasMortgageDebt ? [{ key: "Debt", name: "Debt (mortgage)", color: "#FF6B5B" }] : []),
-    ],
-    full: seriesKeys.map((key, idx) => ({ key, name: key === "Debt" ? "Debt (mortgage)" : key, color: colorForSeries(key, idx) })),
-  };
-  const activeChartSeries = chartSeriesForMode[chartViewMode] || chartSeriesForMode.total;
+
+  // A deliberately light, high-contrast palette for the drill-down bands. The old
+  // PALETTE cycled into dark/muddy values once there were more than a few accounts,
+  // which is what made the full breakdown illegible — these are all bright and
+  // clearly distinguishable from each other and from the green total line.
+  const DRILLDOWN_COLORS = ["#4C8DFF", "#FFB443", "#28C7C7", "#B98CFF", "#FF5C93", "#7DD87D", "#FFA07A", "#6EC7F5"];
+  const colorForSeries = (key, idx) => (key === "Debt" ? "#FF6B5B" : DRILLDOWN_COLORS[idx % DRILLDOWN_COLORS.length]);
+
+  // fixed, meaningful colors for the four top-level categories — consistent with the
+  // section colors used on the Inputs tabs so the chart reads the same as the app
+  const GROUP_SERIES = [
+    { key: "Cash", name: tt("Cash"), color: "#3DDC97" },
+    { key: "_grpInvestments", name: tt("Investments"), color: "#4C8DFF" },
+    { key: "_grpProperties", name: tt("Properties"), color: "#FFB443" },
+    { key: "_grpRetirement", name: tt("Pension"), color: "#B98CFF" },
+  ];
+
+  // which individual accounts sit inside each drill-down group
+  const drilldownMembers = useMemo(() => {
+    const inv = withDisplayNames(investments, "Investment");
+    return {
+      _grpInvestments: inv.filter((i) => i.type !== "house").map((i) => i.displayName),
+      _grpProperties: inv.filter((i) => i.type === "house").map((i) => i.displayName),
+      _grpRetirement: withDisplayNames(retirement, "Account").map((r) => r.displayName),
+    };
+  }, [investments, retirement]);
+
+  // Two modes only. "total" = one net-worth line plus assets/debt context lines.
+  // "breakdown" = the four category bands (or one group's accounts, when drilled in),
+  // always with the net-worth total overlaid on top as a thicker green line.
+  const chartStackedSeries = useMemo(() => {
+    if (chartViewMode === "total") return [];
+    if (chartDrilldown && drilldownMembers[chartDrilldown]?.length) {
+      return drilldownMembers[chartDrilldown].map((name, idx) => ({
+        key: name,
+        name,
+        color: DRILLDOWN_COLORS[idx % DRILLDOWN_COLORS.length],
+      }));
+    }
+    const groups = GROUP_SERIES.filter((g) => years.some((y) => (y[g.key] || 0) > 0));
+    return hasMortgageDebt ? [...groups, { key: "Debt", name: tt("Debt (mortgage)"), color: "#FF6B5B" }] : groups;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chartViewMode, chartDrilldown, drilldownMembers, years, hasMortgageDebt, language]);
 
   const xTicks = useMemo(() => {
     if (!years.length) return [];
@@ -3853,6 +3999,30 @@ export default function RetirementCalculator() {
 
   const orderKeyFor = (inv) => (inv.type === "house" ? `house:${inv.id}` : `investment:${inv.id}`);
   const isOrderable = (inv) => inv.type !== "house" || inv.sellable !== false;
+
+  // Keep the withdrawal order reconciled with the accounts that actually exist.
+  // Individual add/remove/type-change handlers already patch the order, but nothing
+  // guarded the paths that replace state wholesale — loading a saved profile, applyAll,
+  // importing older data. That could leave entries pointing at deleted accounts, or
+  // (worse, and silently) leave a real account out of the order entirely, so it would
+  // never be drawn from at all. This drops orphans and appends anything missing.
+  useEffect(() => {
+    if (!loaded || showOnboarding) return;
+    setWithdrawalOrder((prev) => {
+      const validKeys = new Set(["cash"]);
+      investments.forEach((i) => {
+        if (isOrderable(i)) validKeys.add(orderKeyFor(i));
+      });
+      retirement.forEach((r) => validKeys.add(`retirement:${r.id}`));
+
+      const cleaned = prev.filter((e) => validKeys.has(e));
+      const present = new Set(cleaned);
+      const missing = [...validKeys].filter((k) => !present.has(k));
+      if (cleaned.length === prev.length && missing.length === 0) return prev; // no change
+      return [...cleaned, ...missing];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [investments, retirement, loaded, showOnboarding]);
 
   const updateInvestment = (id, patch) =>
     setInvestments((prev) => {
@@ -4069,15 +4239,27 @@ export default function RetirementCalculator() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
-          <h2 className="text-xl font-semibold mb-2 leading-snug" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-            {step.id === "taxCountry"
-              ? tr(wizardAnswers.region === "EU" ? "wizard_taxCountry_eu" : "wizard_taxCountry_us", step.question)
-              : tr(`wizard_${step.id}`, step.question)}
-          </h2>
-          {step.note && (
+          <div className="flex items-start gap-1.5 mb-2">
+            <h2 className="text-xl font-semibold leading-snug" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              {step.id === "taxCountry"
+                ? tr(wizardAnswers.region === "EU" ? "wizard_taxCountry_eu" : "wizard_taxCountry_us", step.question)
+                : tr(`wizard_${step.id}`, step.question)}
+            </h2>
+            {step.note && (
+              <button
+                onClick={() => setShowStepNote((v) => !v)}
+                className="w-5 h-5 mt-1.5 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+                style={{ background: "#4C8DFF1A", color: "#4C8DFF" }}
+                aria-label="More information"
+              >
+                i
+              </button>
+            )}
+          </div>
+          {step.note && showStepNote && (
             <p className="text-xs text-stone-400 mb-5 leading-relaxed">{tr(`wizard_note_${step.id}`, step.note)}</p>
           )}
-          {!step.note && <div className="mb-3" />}
+          {(!step.note || !showStepNote) && <div className="mb-3" />}
 
           {step.type === "region" ? (
             <div>
@@ -4447,7 +4629,7 @@ export default function RetirementCalculator() {
                                 onChange={(v) => wizardUpdateItem("housesList", item.id, { postSaleAction: v })}
                                 options={[
                                   { value: "rebuy", label: tt("Buy a new home for a set amount") },
-                                  { value: "resize", label: tt("Buy something worth a multiple of the sale price") },
+                                  { value: "resize", label: tt("Buy a smaller property") },
                                   { value: "rent", label: tt("Rent afterward") },
                                 ]}
                               />
@@ -4476,7 +4658,7 @@ export default function RetirementCalculator() {
                             <Field label={tt("Resize factor (0.5 = half, 2 = double)")}>
                               <NumberInput
                                 accent="#4C8DFF"
-                                value={item.resizeFactor ?? 1}
+                                value={item.resizeFactor ?? 0.5}
                                 suffix="×"
                                 onChange={(v) => wizardUpdateItem("housesList", item.id, { resizeFactor: v })}
                               />
@@ -4546,7 +4728,7 @@ export default function RetirementCalculator() {
                     sellable: true,
                     postSaleAction: "none",
                     rebuyValue: 0,
-                    resizeFactor: 1,
+                    resizeFactor: 0.5,
                     postSaleRent: 0,
                     sellingFeePercent: 4,
                   });
@@ -4624,7 +4806,7 @@ export default function RetirementCalculator() {
                     <Field label={tt("Minimum withdrawal age")}>
                       <NumberInput
                         accent="#4C8DFF"
-                        value={item.minAge ?? 60}
+                        value={item.minAge ?? defaultRetirementMinAge(resolveTaxCountry({ region: wizardAnswers.region, taxCountry: wizardAnswers.taxCountry }))}
                         onChange={(v) => wizardUpdateItem("retirementList", item.id, { minAge: v })}
                       />
                     </Field>
@@ -6128,11 +6310,30 @@ is shown in today's terms.`,
                   </Field>
                 ) : (
                   <Field label={tt("Current estimate, at today's salary")}>
-                    <div className="rounded-xl bg-white px-4 py-3 text-sm font-semibold shadow-sm" style={{ color: SECTION_COLORS.profile }}>
-                      ~{Math.round(
-                        computeOrdinaryTaxRate(resolveTaxCountry(profile), work.salary) + computeSalaryAddOnRate(resolveTaxCountry(profile), work.salary)
-                      )}%
-                    </div>
+                    {(() => {
+                      const tc = resolveTaxCountry(profile);
+                      const sc = computeSalaryAddOnRate(tc, work.salary);
+                      const { afterSocial, taxable } = taxableSalaryPortion(tc, work.salary);
+                      const itRate = computeOrdinaryTaxRate(tc, taxable);
+                      const net = afterSocial * (1 - itRate / 100);
+                      const totalPct = work.salary > 0 ? 100 - (100 * net) / work.salary : 0;
+                      return (
+                        <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
+                          <div className="text-sm font-semibold" style={{ color: SECTION_COLORS.profile }}>
+                            ~{Math.round(totalPct)}% {tt("of your salary, in total")}
+                          </div>
+                          <div className="text-[11px] text-stone-400 mt-1 leading-snug">
+                            {sc > 0 && (
+                              <>
+                                {round2(sc)}% {tt("social charges")}, {tt("then")} ~{Math.round(itRate)}% {tt("income tax on what's left")}.
+                                <br />
+                              </>
+                            )}
+                            {tt("Social charges apply to salary only — not to a pension, rent, or interest.")}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </Field>
                 )}
                 {(profile.taxMode ?? "manual") === "auto" && isTaxCountrySupported(resolveTaxCountry(profile)) && (
@@ -6712,6 +6913,23 @@ is shown in today's terms.`,
                             </p>
                           )}
 
+                          <Field label={tt("Does this have a mortgage?")}>
+                            <SelectInput
+                              value={(inv.mortgageBalance || 0) > 0 ? "yes" : "no"}
+                              onChange={(v) =>
+                                v === "yes"
+                                  ? updateMortgage(inv, { mortgageBalance: Math.round((inv.amount || 0) * 0.4), mortgagePayment: inv.mortgagePayment || 0 })
+                                  : updateMortgage(inv, { mortgageBalance: 0, mortgagePayment: 0 })
+                              }
+                              options={[
+                                { value: "no", label: tt("No — owned outright") },
+                                { value: "yes", label: tt("Yes — still paying it off") },
+                              ]}
+                            />
+                          </Field>
+
+                          {(inv.mortgageBalance || 0) > 0 && (
+                            <>
                           <Field label={tt("Mortgage balance remaining")}>
                             <NumberInput
                               accent={color}
@@ -6847,6 +7065,8 @@ is shown in today's terms.`,
                           >
                             <Table2 size={13} /> See full payment schedule
                           </button>
+                            </>
+                          )}
 
                           <button
                             onClick={() => setExpandedAdvanced((prev) => ({ ...prev, [inv.id]: !prev[inv.id] }))}
@@ -6910,7 +7130,7 @@ is shown in today's terms.`,
                                           onChange={(v) => updateInvestment(inv.id, { postSaleAction: v })}
                                           options={[
                                             { value: "rebuy", label: tt("Buy a new home for a set amount") },
-                                            { value: "resize", label: tt("Buy something worth a multiple of the sale price") },
+                                            { value: "resize", label: tt("Buy a smaller property") },
                                             { value: "rent", label: tt("Rent afterward") },
                                           ]}
                                         />
@@ -6929,7 +7149,7 @@ is shown in today's terms.`,
                                       <Field label={tt("Resize factor (0.5 = half, 2 = double)")}>
                                         <NumberInput
                                           accent={color}
-                                          value={inv.resizeFactor ?? 1}
+                                          value={inv.resizeFactor ?? 0.5}
                                           suffix="×"
                                           onChange={(v) => updateInvestment(inv.id, { resizeFactor: v })}
                                         />
@@ -7393,8 +7613,7 @@ is shown in today's terms.`,
             <div className="flex rounded-full p-0.5 mb-2 w-full" style={{ background: "#F2EFFB" }}>
               {[
                 { id: "total", label: tr("mode_total", "Total") },
-                { id: "assetsVsDebt", label: tr("mode_assets_debt", "Assets vs debt") },
-                { id: "full", label: tr("mode_full", "Full breakdown") },
+                { id: "breakdown", label: tr("mode_full", "Breakdown") },
               ].map((m) => (
                 <button
                   key={m.id}
@@ -7421,13 +7640,27 @@ is shown in today's terms.`,
             {showChartDetails && (
               <p className="text-xs text-stone-400 mb-3 -mt-1">
                 {realTermsView ? tr("chart_note_real") : tr("chart_note_nominal")} {tr("chart_tap_hint")}
-                {chartViewMode === "total" && " This line is your net worth — assets minus everything you owe."}
-                {chartViewMode === "assetsVsDebt" && hasMortgageDebt && " Debt is shown as a red band below zero, separate from your assets above it."}
-                {chartViewMode === "full" && seriesKeys.includes("Debt") && ` ${tr("chart_debt_note")}`}
+                {chartViewMode === "total" && ` ${tr("chart_total_note")}`}
+                {chartViewMode === "breakdown" && hasMortgageDebt && ` ${tr("chart_debt_note")}`}
               </p>
             )}
+            {chartViewMode === "breakdown" && (
+              <div className="mb-2">
+                <SelectInput
+                  value={chartDrilldown || "all"}
+                  onChange={(v) => setChartDrilldown(v === "all" ? null : v)}
+                  options={[
+                    { value: "all", label: tt("All categories") },
+                    ...GROUP_SERIES.filter((g) => g.key !== "Cash" && (drilldownMembers[g.key] || []).length > 0).map((g) => ({
+                      value: g.key,
+                      label: `${g.name} — ${tt("show split")}`,
+                    })),
+                  ]}
+                />
+              </div>
+            )}
             <ResponsiveContainer width="100%" height={340}>
-              <AreaChart
+              <ComposedChart
                 data={displayYears}
                 margin={{ top: 5, right: 5, left: 0, bottom: 12 }}
                 onClick={(state) => {
@@ -7436,7 +7669,7 @@ is shown in today's terms.`,
                 style={{ cursor: "pointer" }}
               >
                 <defs>
-                  {activeChartSeries.map((s) => (
+                  {chartStackedSeries.map((s) => (
                     <linearGradient key={s.key} id={`fill-${s.key}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={s.color} stopOpacity={s.key === "Debt" ? 0.55 : 0.7} />
                       <stop offset="95%" stopColor={s.color} stopOpacity={s.key === "Debt" ? 0.15 : 0.08} />
@@ -7453,9 +7686,11 @@ is shown in today's terms.`,
                 />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: "#8A81A6" }} width={45} />
                 <Tooltip content={(props) => <StackedChartTooltip {...props} currency={currency} netWorthLabel={tr("net_worth_label", "Net worth")} />} />
-                {chartViewMode !== "total" && <Legend wrapperStyle={{ fontSize: 11, paddingTop: 14 }} />}
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 14 }} />
                 <ReferenceLine y={0} stroke="#C9C2E0" strokeWidth={1} />
-                {activeChartSeries.map((s) => (
+
+                {/* breakdown mode: the stacked category (or drilled-in account) bands */}
+                {chartStackedSeries.map((s) => (
                   <Area
                     key={s.key}
                     type="monotone"
@@ -7463,10 +7698,30 @@ is shown in today's terms.`,
                     name={s.name}
                     stackId="1"
                     stroke={s.color}
-                    strokeWidth={2}
+                    strokeWidth={1.5}
                     fill={`url(#fill-${s.key})`}
                   />
                 ))}
+
+                {/* total mode: assets and debt as context lines around the net-worth line */}
+                {chartViewMode === "total" && (
+                  <Line type="monotone" dataKey="_grossAssets" name={tt("Assets")} stroke="#4C8DFF" strokeWidth={1.5} dot={false} />
+                )}
+                {chartViewMode === "total" && hasMortgageDebt && (
+                  <Line type="monotone" dataKey="Debt" name={tt("Debt (mortgage)")} stroke="#FF6B5B" strokeWidth={1.5} dot={false} />
+                )}
+
+                {/* net worth is ALWAYS drawn, in both modes — thicker and green so it
+                    reads as the headline number rather than one series among many */}
+                <Line
+                  type="monotone"
+                  dataKey="_total"
+                  name={tr("net_worth_label", "Net worth")}
+                  stroke="#1B7A4C"
+                  strokeWidth={3}
+                  dot={false}
+                />
+
                 {ranOutAge && (
                   <ReferenceLine
                     x={ranOutAge}
@@ -7476,7 +7731,7 @@ is shown in today's terms.`,
                   />
                 )}
                 {selectedAge != null && <ReferenceLine x={selectedAge} stroke="#4C8DFF" strokeWidth={2} />}
-              </AreaChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
 
