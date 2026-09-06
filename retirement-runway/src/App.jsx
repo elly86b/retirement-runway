@@ -10,6 +10,12 @@ import {
 // ---------- helpers ----------
 const uid = () => Math.random().toString(36).slice(2, 9);
 const REGION_CURRENCY = { US: "USD", EU: "EUR", UK: "GBP", Canada: "CAD", Other: "USD" };
+// reverse lookup: which market region does a given currency imply? Used so a USD-priced
+// investment gets US return assumptions even if the person lives in the Eurozone.
+const CURRENCY_REGION = { USD: "US", EUR: "EU", GBP: "UK", CAD: "Canada" };
+function regionForCurrency(ccy, fallbackRegion) {
+  return CURRENCY_REGION[ccy] || fallbackRegion;
+}
 const SUPPORTED_CURRENCIES = ["USD", "EUR", "GBP", "CAD"];
 
 // ---------- language / localization ----------
@@ -204,6 +210,8 @@ const PHRASES = {
   "Assets": { fr: "Actifs", it: "Attivi" },
   "Debt (mortgage)": { fr: "Dette (prêt immobilier)", it: "Debito (mutuo)" },
   "All categories": { fr: "Toutes les catégories", it: "Tutte le categorie" },
+  "More options": { fr: "Plus d'options", it: "Altre opzioni" },
+  "One-off amounts": { fr: "Montants ponctuels", it: "Importi una tantum" },
   "show split": { fr: "voir le détail", it: "vedi dettaglio" },
   "of your salary, in total": { fr: "de votre salaire, au total", it: "del tuo stipendio, in totale" },
   "then": { fr: "puis", it: "poi" },
@@ -981,6 +989,7 @@ const REGIONS = ["US", "EU", "UK", "Canada", "Other"];
 function defaultGrowthRateForType(rd, type) {
   if (type === "cd") return rd.cdRate;
   if (type === "bond") return rd.bondReturn;
+  if (type === "house") return rd.propertyReturn;
   return rd.marketReturn; // market, dividend
 }
 
@@ -1005,30 +1014,35 @@ const REGION_DEFAULTS = {
   US: {
     currency: "USD", inflation: 2.5, cashRate: 0, cdRate: 4.0, cdRateLongRun: 2.0,
     marketReturn: 7.0, historicalReturn: 10.0, index: "S&P 500",
+    propertyReturn: 2.0, propertyHistoricalReturn: 4.0,
     bondReturn: 3.5, bondHistoricalReturn: 5.0, bondIndex: "Bloomberg US Aggregate Bond Index",
     label: "United States",
   },
   EU: {
     currency: "EUR", inflation: 2.1, cashRate: 0, cdRate: 2.5, cdRateLongRun: 1.6,
     marketReturn: 4.0, historicalReturn: 7.0, index: "Euro Stoxx 50",
+    propertyReturn: 1.0, propertyHistoricalReturn: 3.0,
     bondReturn: 2.5, bondHistoricalReturn: 4.0, bondIndex: "Bloomberg Euro Aggregate Bond Index",
     label: "Eurozone",
   },
   UK: {
     currency: "GBP", inflation: 2.5, cashRate: 0, cdRate: 4.0, cdRateLongRun: 2.0,
     marketReturn: 3.5, historicalReturn: 6.5, index: "FTSE 100",
+    propertyReturn: 1.5, propertyHistoricalReturn: 3.5,
     bondReturn: 3.5, bondHistoricalReturn: 5.0, bondIndex: "Bloomberg Sterling Aggregate Bond Index",
     label: "United Kingdom",
   },
   Canada: {
     currency: "CAD", inflation: 2.0, cashRate: 0, cdRate: 3.5, cdRateLongRun: 1.5,
     marketReturn: 5.0, historicalReturn: 8.0, index: "S&P/TSX",
+    propertyReturn: 2.0, propertyHistoricalReturn: 4.5,
     bondReturn: 4.0, bondHistoricalReturn: 5.5, bondIndex: "FTSE Canada Universe Bond Index",
     label: "Canada",
   },
   Other: {
     currency: "USD", inflation: 2.5, cashRate: 0, cdRate: 2.5, cdRateLongRun: 1.6,
     marketReturn: 4.0, historicalReturn: 7.0, index: "global equities",
+    propertyReturn: 1.5, propertyHistoricalReturn: 3.0,
     bondReturn: 3.0, bondHistoricalReturn: 4.5, bondIndex: "global aggregate bonds",
     label: "Somewhere else",
   },
@@ -1114,7 +1128,17 @@ const TAX_TABLES = {
     // folded into it, or a retiree's pension would get taxed as if it were still salary.
     // ~23% is a representative single, non-cadre figure; real French payroll deductions
     // are somewhat banded and vary by sector, so this is a round approximation.
-    salaryOnlyAddOn: 23,
+    // Banded, not flat: French cotisations salariales fall sharply above the PASS
+    // (plafond annuel de la sécurité sociale, €47,100 in 2025). Vieillesse plafonnée
+    // stops at 1 PASS and Agirc-Arrco retirement contributions stop at 8 PASS
+    // (€376,800), above which essentially only CSG/CRDS (~9.7%) continues. A flat 23%
+    // badly over-charged high earners — a €750k salary was losing ~23% to social
+    // charges when the real effective figure is closer to 16%.
+    salaryOnlyAddOn: [
+      { upTo: 47100, rate: 23 }, // up to 1 PASS — full contributions
+      { upTo: 376800, rate: 22 }, // 1–8 PASS — vieillesse plafonnée stops, Agirc-Arrco T2 higher
+      { upTo: Infinity, rate: 10 }, // above 8 PASS — essentially CSG/CRDS only
+    ],
     // "abattement de 10% pour frais professionnels" — a standard deduction applied to
     // salary before income tax is calculated, capped per person
     salaryDeductionPct: 10,
@@ -1138,7 +1162,13 @@ const TAX_TABLES = {
     ],
     // mandatory Sozialversicherung (pension ~9.3%, unemployment ~1.3%, health ~8.05%,
     // long-term care ~1.8-2.3%) — salary only, same reasoning as France above
-    salaryOnlyAddOn: 20,
+    // Banded: German Sozialversicherung stops entirely above the Beitragsbemessungs-
+    // grenzen — health/care at €66,150 and pension/unemployment at €96,600 (2025).
+    salaryOnlyAddOn: [
+      { upTo: 66150, rate: 20 }, // all four branches
+      { upTo: 96600, rate: 10.6 }, // pension 9.3% + unemployment 1.3% only
+      { upTo: Infinity, rate: 0 }, // above both ceilings — nothing further
+    ],
     // Werbungskostenpauschbetrag — flat employee expenses allowance
     salaryDeductionPct: 0,
     salaryDeductionFlat: 1230,
@@ -1154,8 +1184,13 @@ const TAX_TABLES = {
       { upTo: 50000, rate: 35 },
       { upTo: Infinity, rate: 43 },
     ],
-    // mandatory INPS employee contribution — salary only
-    salaryOnlyAddOn: 9,
+    // INPS employee contribution, banded — a higher rate above the first threshold,
+    // then capped entirely at the massimale for post-1996 entrants (~€120,607)
+    salaryOnlyAddOn: [
+      { upTo: 55008, rate: 9.19 },
+      { upTo: 120607, rate: 10.19 },
+      { upTo: Infinity, rate: 0 },
+    ],
     // standard flat "imposta sostitutiva" on most financial income (government
     // bonds get a preferential 12.5%, ignored here as the less common case)
     dividend: [{ upTo: Infinity, rate: 26 }],
@@ -1171,8 +1206,12 @@ const TAX_TABLES = {
       { upTo: 300000, rate: 45 },
       { upTo: Infinity, rate: 47 },
     ],
-    // mandatory Seguridad Social employee contribution — salary only
-    salaryOnlyAddOn: 6,
+    // Seguridad Social employee contribution, capped at the base máxima
+    // (~€4,909.50/month = ~€58,914/year in 2025) — nothing above it
+    salaryOnlyAddOn: [
+      { upTo: 58914, rate: 6.48 },
+      { upTo: Infinity, rate: 0 },
+    ],
     // "base del ahorro" — Spain's separate savings-income scale for dividends/interest
     dividend: [
       { upTo: 6000, rate: 19 },
@@ -1230,7 +1269,11 @@ const TAX_TABLES = {
     // FICA (Social Security 6.2% + Medicare 1.45%) — salary only; the Social Security
     // portion actually caps at a wage threshold, ignored here for simplicity, so this
     // slightly overstates the add-on for very high earners
-    salaryOnlyAddOn: 7.65,
+    salaryOnlyAddOn: [
+      { upTo: 176100, rate: 7.65 }, // SS 6.2% + Medicare 1.45%, to the 2025 wage base
+      { upTo: 200000, rate: 1.45 }, // SS capped out — Medicare only
+      { upTo: Infinity, rate: 2.35 }, // + 0.9% additional Medicare surtax
+    ],
     // federal LTCG/qualified-dividend rate (0/15/20%) stacked with NY State + NYC,
     // which — unlike federal — tax dividends as ordinary income with no discount
     dividend: [
@@ -1253,7 +1296,11 @@ const TAX_TABLES = {
       { upTo: Infinity, rate: 42 },
     ],
     // FICA — salary only, see the note on US_NY above
-    salaryOnlyAddOn: 7.65,
+    salaryOnlyAddOn: [
+      { upTo: 176100, rate: 7.65 }, // SS 6.2% + Medicare 1.45%, to the 2025 wage base
+      { upTo: 200000, rate: 1.45 }, // SS capped out — Medicare only
+      { upTo: Infinity, rate: 2.35 }, // + 0.9% additional Medicare surtax
+    ],
     // federal long-term capital gains / qualified dividend brackets (0/15/20%), plus the
     // same ~5pt state add-on used above
     dividend: [
@@ -1272,9 +1319,16 @@ const TAX_TABLES = {
       { upTo: 253414, rate: 42 },
       { upTo: Infinity, rate: 46 },
     ],
-    // CPP (~5.95%) + EI (~1.64%) — salary only; both actually cap at a wage threshold,
-    // ignored here for simplicity, same trade-off as the US FICA add-on above
-    salaryOnlyAddOn: 7.6,
+    // CPP + CPP2 + EI, all properly capped (2025): basic exemption $3,500; CPP 5.95%
+    // to the YMPE $71,300; CPP2 4% from there to $81,200; EI 1.64% to $65,700.
+    // Nothing at all above $81,200.
+    salaryOnlyAddOn: [
+      { upTo: 3500, rate: 0 }, // basic exemption
+      { upTo: 65700, rate: 7.59 }, // CPP 5.95 + EI 1.64
+      { upTo: 71300, rate: 5.95 }, // EI maxed out
+      { upTo: 81200, rate: 4 }, // CPP2 band only
+      { upTo: Infinity, rate: 0 },
+    ],
     // Canada's dividend tax credit meaningfully lowers the effective rate on eligible
     // dividends relative to ordinary income — approximated here, not exact
     dividend: [
@@ -1547,7 +1601,6 @@ const SECTIONS = [
   { id: "cash", label: "Cash", icon: <Wallet size={14} /> },
   { id: "investments", label: "Investments", icon: <TrendingUp size={14} /> },
   { id: "retirement", label: "Retirement", icon: <PiggyBank size={14} /> },
-  { id: "lumpsums", label: "Lump sums", icon: <Sparkles size={14} /> },
   { id: "order", label: "Withdrawal order", icon: <Home size={14} /> },
 ];
 
@@ -1613,6 +1666,10 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
   let monthlyExpenses = expensesState.monthly;
   let extraRentExpenseAnnual = 0;
   let ranOutAge = null;
+  // money you needed but could not raise in any year — it doesn't vanish, it accrues
+  // (arrears/borrowing). Without this, net worth kept RISING after the plan had failed,
+  // because an unsellable home carried on appreciating with nothing drawn against it.
+  let cumulativeUnfunded = 0;
   const retirementStartAge = profile.currentAge + Math.max(0, work.yearsWorking);
 
   // ---- state pension pro-rata ----
@@ -1919,6 +1976,7 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
 
     let cashWithdrawn = 0;
     let defaultedThisYear = false;
+    let unfundedThisYear = 0;
     let hitCashFloor = false;
     let toCashSurplus = 0;
     let toInvestSurplus = 0;
@@ -2150,12 +2208,15 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
       }
       if (shortfall > 0 && ranOutAge === null) ranOutAge = age;
       if (shortfall > 0) defaultedThisYear = true;
+      unfundedThisYear = Math.max(0, shortfall);
     }
 
     // Fix 2: if we couldn't cover this year's costs, a mortgaged property must be sold —
     // you can't simply stop paying and keep the house. Proceeds cover what they can.
     if (defaultedThisYear) {
-      const mortgaged = invBal.find((i) => i.type === "house" && !i._sold && (i.mortgageBalance || 0) > 0.01);
+      const mortgagedCandidates = invBal.filter((i) => i.type === "house" && !i._sold && (i.mortgageBalance || 0) > 0.01);
+      const mortgaged =
+        mortgagedCandidates.find((i) => i.usage === "rental") || mortgagedCandidates[0];
       if (mortgaged) {
         const saleValue = mortgaged.amount;
         const feeRate = Math.min(Math.max((mortgaged.sellingFeePercent ?? 4) / 100, 0), 0.5);
@@ -2196,6 +2257,9 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
           explain[mortgaged.displayName].forcedProceeds = proceeds;
         }
       }
+      // whatever still couldn't be raised this year accrues as a liability — see the
+      // note on cumulativeUnfunded above
+      cumulativeUnfunded += unfundedThisYear;
     }
 
     explain["Cash"] = {
@@ -2285,7 +2349,8 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
     // overstated net worth whenever a property was underwater. Defining it once here off
     // gross assets and gross debt also makes it reconcile exactly with what the chart
     // draws (positive bands, minus the red Debt band).
-    record._total = record._grossAssets - totalMortgageDebt;
+    record._unfunded = cumulativeUnfunded;
+    record._total = record._grossAssets - totalMortgageDebt - cumulativeUnfunded;
     record._explain = explain;
     record._defaulted = defaultedThisYear;
     record._lumpSumEvents = lumpSumEvents;
@@ -2861,12 +2926,6 @@ function getWizardSteps(a) {
   }
   steps.push(
     {
-      id: "customRates",
-      type: "yesno",
-      question: "Do you want to set your own growth, inflation, and tax rates?",
-      note: "If you'd rather not, we'll use deliberately cautious defaults for where you live — not the rosy historical average, but roughly a 25th-percentile decade (i.e. assuming markets do somewhat worse than usual). Your tax rate will also be worked out automatically from your country's tax brackets and your actual income each year, instead of one flat guessed number.",
-    },
-    {
       id: "salary",
       type: "number",
       question: "What's your annual salary, before tax?",
@@ -2898,7 +2957,7 @@ function getWizardSteps(a) {
     steps.push({ id: "dividendTaxRate", type: "number", question: "And your tax rate specifically on dividend income, if different?", suffix: "%" });
     steps.push({ id: "capitalGainsTaxRate", type: "number", question: "And your tax rate on capital gains — selling an investment or a house?", suffix: "%" });
   }
-  steps.push({ id: "cash", type: "number", question: "How much cash do you have in the bank (not invested)?", suffix: cashCcySymbol });
+  steps.push({ id: "cashList", type: "cashlist", question: "How much cash do you have in the bank (not invested)?" });
   if (a.customRates) {
     steps.push({ id: "cashRate", type: "number", question: "What interest rate does your cash earn?", suffix: "%/yr" });
   }
@@ -2927,7 +2986,9 @@ const WIZARD_DEFAULTS = {
   taxCountry: null,
   currentAge: 40,
   multiCurrency: null,
-  customRates: null,
+  // onboarding always uses the regional defaults now — there's no "do you want to set
+  // your own rates?" question. Every rate stays editable afterwards on the Inputs tabs.
+  customRates: false,
   salary: 60000,
   salaryGrowth: 2,
   yearsWorking: 30,
@@ -2938,6 +2999,8 @@ const WIZARD_DEFAULTS = {
   capitalGainsTaxRate: 24,
   cash: 5000,
   cashCurrency: "EUR",
+  // cash is a LIST so someone holding, say, some EUR and some USD can enter both
+  cashList: [{ id: "seed-cash", name: "Cash", amount: 5000, currency: "EUR" }],
   cashRate: REGION_DEFAULTS.EU.cashRate,
   hasInvestments: null,
   investmentsList: [{ id: uid(), name: "Investments", amount: 10000, contribution: 300, growthRate: 6, currency: "EUR" }],
@@ -2953,9 +3016,8 @@ const WIZARD_DEFAULTS = {
       mortgagePayment: 1200,
       mortgageInputMode: "rate",
       mortgageRate: 4.5,
-      mortgageYearsLeft: 20,
       rent: 0,
-      growthRate: 3,
+      growthRate: REGION_DEFAULTS.EU.propertyReturn,
       currency: "EUR",
       sellable: false,
       postSaleAction: "rent",
@@ -2967,7 +3029,7 @@ const WIZARD_DEFAULTS = {
   ],
   hasRetirementAccount: null,
   retirementList: [
-    { id: uid(), name: "Retirement account", balance: 20000, contribution: 0, growthRate: 6, minAge: 60, taxTreatment: "pretax", currency: "EUR" },
+    { id: uid(), name: "Retirement account", balance: 20000, contribution: 0, growthRate: 6, taxTreatment: "pretax", currency: "EUR" },
   ],
   hasPension: null,
   pensionStartAge: 67,
@@ -2991,9 +3053,15 @@ function detectWizardDefaults() {
     cashRate: rd.cashRate,
     cashCurrency: rd.currency,
     salaryCurrency: rd.currency,
+    cashList: WIZARD_DEFAULTS.cashList.map((x) => ({ ...x, id: uid(), currency: rd.currency })),
     investmentsList: WIZARD_DEFAULTS.investmentsList.map((i) => ({ ...i, currency: rd.currency, growthRate: rd.marketReturn })),
     housesList: WIZARD_DEFAULTS.housesList.map((h) => ({ ...h, currency: rd.currency })),
-    retirementList: WIZARD_DEFAULTS.retirementList.map((x) => ({ ...x, currency: rd.currency, growthRate: rd.marketReturn })),
+    retirementList: WIZARD_DEFAULTS.retirementList.map((x) => ({
+      ...x,
+      currency: rd.currency,
+      growthRate: rd.marketReturn,
+      minAge: defaultRetirementMinAge(taxCountry || resolveTaxCountry({ region })),
+    })),
   };
 }
 
@@ -3040,7 +3108,7 @@ const DEFAULTS = {
       region: "EU",
       currency: "EUR",
       amount: 400000,
-      growthRate: 3,
+      growthRate: REGION_DEFAULTS.EU.propertyReturn,
       usage: "primary",
       sellable: false,
       postSaleAction: "rent",
@@ -3062,7 +3130,7 @@ const DEFAULTS = {
       amount: 150000,
       growthRate: 6,
       contribution: 0,
-      minAge: 60,
+      minAge: defaultRetirementMinAge("DE"),
       taxTreatment: "pretax",
       earlyAccessAllowed: false,
       earlyPenalty: 10,
@@ -3079,7 +3147,7 @@ const DEFAULTS = {
     fullPensionAge: 65,
   },
   lumpSums: [],
-  savingsRule: { cashPercent: 50, minCash: 10000, maxCash: 500000, targetInvestmentId: defaultIndexFundId },
+  savingsRule: { cashPercent: 50, minCash: 4000 * 2, maxCash: 4000 * 12, targetInvestmentId: defaultIndexFundId },
 };
 
 function freshDefaults() {
@@ -3153,6 +3221,10 @@ export default function RetirementCalculator() {
   const [infoRatesRegion, setInfoRatesRegion] = useState("EU"); // Info page: region/country tables
   const [infoTaxCountry, setInfoTaxCountry] = useState("DE");
   const [expandedAdvanced, setExpandedAdvanced] = useState({}); // per house-card id: is the "Advanced" section open?
+  // ITEM 17: input cards collapse to a one-line summary by default so a whole list fits
+  // on screen without scrolling. Keyed by account id; absent = collapsed.
+  const [expandedCards, setExpandedCards] = useState({});
+  const toggleCard = (id) => setExpandedCards((prev) => ({ ...prev, [id]: !prev[id] }));
   const [realTermsView, setRealTermsView] = useState(false); // Results chart: nominal (future $) vs today's money
   // Results chart detail level: "total" (one line, simplest), "assetsVsDebt" (gross
   // assets above zero, mortgage debt below — the pre-existing per-bucket colors and the
@@ -3160,7 +3232,6 @@ export default function RetirementCalculator() {
   // account broken out, the original view). Defaults to the simplest one.
   const [chartViewMode, setChartViewMode] = useState("total");
   const [chartDrilldown, setChartDrilldown] = useState(null); // null = show all four groups
-  const [showChartDetails, setShowChartDetails] = useState(false); // Results tab: long explanation collapsed by default
   const [showWhatIfIntro, setShowWhatIfIntro] = useState(false); // What-If tab: explanation collapsed behind an (i)
   const [fxRates, setFxRates] = useState(FX_FALLBACK);
   const [fxSource, setFxSource] = useState("fallback"); // "live" | "fallback" | "loading"
@@ -3254,15 +3325,18 @@ export default function RetirementCalculator() {
     })();
   }, []);
 
-  // seed the first What-If row with the current baseline value once we know it
+  // seed the first What-If row with the current baseline value once we know it.
+  // Deliberately waits for onboarding to FINISH — seeding while the wizard is still open
+  // captured the app defaults (4,000/mo spending, etc.) rather than the person's real
+  // answers, and since the row then existed it was never re-seeded.
   useEffect(() => {
-    if (loaded && whatIfChanges.length === 0) {
+    if (loaded && !showOnboarding && whatIfChanges.length === 0) {
       const lever = LEVERS[0];
       const baseline = { profile, work, expensesState, cash, investments, retirement, withdrawalOrder, pension };
       setWhatIfChanges([{ id: uid(), leverId: lever.id, value: round2(lever.getCurrent(baseline)) }]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
+  }, [loaded, showOnboarding]);
 
   // the profile is saved automatically, continuously — there's no separate "Save"
   // step to remember to click. This is the ONLY persistence path going forward.
@@ -3358,15 +3432,23 @@ export default function RetirementCalculator() {
       salaryGrowth: a.customRates ? a.salaryGrowth ?? 2 : 2,
     });
     setExpensesState({ monthly: a.monthlyExpenses, inflation: a.customRates ? a.inflation ?? rd.inflation : rd.inflation });
-    setCash([
-      {
-        id: uid(),
-        name: "Cash",
-        amount: a.cash,
-        rate: a.customRates ? a.cashRate ?? rd.cashRate : rd.cashRate,
-        currency: a.multiCurrency ? a.cashCurrency || mainCcy : mainCcy,
-      },
-    ]);
+    // 2 months' spending kept as an untouchable emergency floor; above 12 months'
+    // spending, surplus is invested rather than left sitting in cash
+    setSavingsRule((prev) => ({
+      ...prev,
+      minCash: Math.round((a.monthlyExpenses || 0) * 2),
+      maxCash: Math.round((a.monthlyExpenses || 0) * 12),
+    }));
+    const cashAccounts = (a.cashList || []).length
+      ? a.cashList.map((x) => ({
+          id: x.id,
+          name: x.name || "Cash",
+          amount: x.amount || 0,
+          rate: a.customRates ? a.cashRate ?? rd.cashRate : rd.cashRate,
+          currency: x.currency || mainCcy,
+        }))
+      : [{ id: uid(), name: "Cash", amount: a.cash || 0, rate: rd.cashRate, currency: mainCcy }];
+    setCash(cashAccounts);
 
     const newInvestments = [];
     const newOrder = ["cash"];
@@ -3374,18 +3456,24 @@ export default function RetirementCalculator() {
     if (a.hasInvestments) {
       a.investmentsList.forEach((item) => {
         const itemType = item.type || "market";
+        const itemCurrency = a.multiCurrency ? item.currency || mainCcy : mainCcy;
+        const itemRegion = regionForCurrency(itemCurrency, region);
+        const itemRd = REGION_DEFAULTS[itemRegion] || rd;
         newInvestments.push({
           id: item.id,
           name: item.name || "Investment",
           type: itemType,
-          region,
-          currency: a.multiCurrency ? item.currency || mainCcy : mainCcy,
+          // an investment priced in USD belongs to the US market, even for someone
+          // living in the Eurozone — currency is the best signal we have for which
+          // market's return assumptions should apply
+          region: itemRegion,
+          currency: itemCurrency,
           amount: item.amount || 0,
-          growthRate: item.growthRate ?? (itemType === "cd" ? rd.cdRate : rd.marketReturn),
+          growthRate: item.growthRate ?? defaultGrowthRateForType(itemRd, itemType),
           contribution: item.contribution || 0,
           contributionFrequency: "monthly",
           dividendYield: itemType === "dividend" ? item.dividendYield ?? 3 : undefined,
-          cdLongRunRate: itemType === "cd" ? item.cdLongRunRate ?? rd.cdRateLongRun : undefined,
+          cdLongRunRate: itemType === "cd" ? item.cdLongRunRate ?? itemRd.cdRateLongRun : undefined,
           cdTenorYears: itemType === "cd" ? item.cdTenorYears ?? 1 : undefined,
           costBasis: item.amount || 0,
         });
@@ -3404,7 +3492,10 @@ export default function RetirementCalculator() {
       });
       orderedHouses.forEach((item) => {
         const isPrimary = (item.usage || "primary") !== "rental";
-        const sellable = item.sellable !== undefined ? item.sellable : !isPrimary;
+        // A rental is always available as a fallback — only the primary home can be
+        // marked "never sell". Its proceeds go through the normal surplus rule (cash up
+        // to your ceiling, then invested), so there's no separate reinvest question.
+        const sellable = isPrimary ? item.sellable !== false : true;
         const hasMortgage = !!item.hasMortgage && (item.mortgageBalance || 0) > 0;
         const mortgageRate = item.mortgageRate ?? 4.5;
         // derive the remaining term from the actual balance/payment/rate rather than
@@ -3418,7 +3509,7 @@ export default function RetirementCalculator() {
           region,
           currency: a.multiCurrency ? item.currency || mainCcy : mainCcy,
           amount: item.value || 0,
-          growthRate: item.growthRate ?? 3,
+          growthRate: item.growthRate ?? rd.propertyReturn,
           usage: isPrimary ? "primary" : "rental",
           sellable,
           postSaleAction: sellable ? item.postSaleAction || "none" : "none",
@@ -3469,7 +3560,47 @@ export default function RetirementCalculator() {
       percentOfSalary: a.pensionPercent,
       indexed: a.pensionIndexed !== false,
     });
-    setWithdrawalOrder(newOrder);
+    // Order the fallbacks smallest-first: drawing down a small pot fully before touching
+    // a large one avoids nibbling every account at once, and leaves the biggest
+    // (usually longest-compounding) assets invested for longer. The primary residence is
+    // forced last — it's where you live, so it should be the final resort no matter its
+    // value. "cash" always stays at the front as the liquid buffer.
+    const valueOfOrderEntry = (entry) => {
+      const { type, id } = parseOrderEntry(entry);
+      if (type === "investment") {
+        const inv = newInvestments.find((i) => i.id === id);
+        return inv ? inv.amount || 0 : 0;
+      }
+      if (type === "house") {
+        const h = newInvestments.find((i) => i.id === id);
+        if (!h) return 0;
+        // rank a property on the equity it would actually release, not its headline value
+        return Math.max(0, (h.amount || 0) - (h.mortgageBalance || 0));
+      }
+      if (type === "retirement") {
+        const r = newRetirement.find((x) => x.id === id);
+        return r ? r.amount || 0 : 0;
+      }
+      return 0;
+    };
+    const isPrimaryHomeEntry = (entry) => {
+      const { type, id } = parseOrderEntry(entry);
+      if (type !== "house") return false;
+      const h = newInvestments.find((i) => i.id === id);
+      return !!h && h.usage !== "rental";
+    };
+    const sortedOrder = [
+      "cash",
+      ...newOrder
+        .filter((e) => e !== "cash")
+        .sort((x, y) => {
+          const xPrimary = isPrimaryHomeEntry(x) ? 1 : 0;
+          const yPrimary = isPrimaryHomeEntry(y) ? 1 : 0;
+          if (xPrimary !== yPrimary) return xPrimary - yPrimary; // primary home always last
+          return valueOfOrderEntry(x) - valueOfOrderEntry(y); // then smallest first
+        }),
+    ];
+    setWithdrawalOrder(sortedOrder);
     setLumpSums([]);
 
     setShowOnboarding(false);
@@ -3702,7 +3833,7 @@ export default function RetirementCalculator() {
             region: profile.region,
             currency: currency,
             amount: value,
-            growthRate: 3,
+            growthRate: (REGION_DEFAULTS[profile.region] || REGION_DEFAULTS.EU).propertyReturn,
             usage: "rental",
             sellable: true,
             postSaleAction: "none",
@@ -3853,6 +3984,10 @@ export default function RetirementCalculator() {
   // which is what made the full breakdown illegible — these are all bright and
   // clearly distinguishable from each other and from the green total line.
   const DRILLDOWN_COLORS = ["#4C8DFF", "#FFB443", "#28C7C7", "#B98CFF", "#FF5C93", "#7DD87D", "#FFA07A", "#6EC7F5"];
+  // SVG gradient ids can't contain spaces or punctuation — an account called
+  // "Primary Home" produced url(#fill-Primary Home), which silently fails to resolve
+  // and renders the band BLACK. Strip everything that isn't alphanumeric.
+  const gradId = (key) => `fill-${String(key).replace(/[^a-zA-Z0-9]/g, "_")}`;
   const colorForSeries = (key, idx) => (key === "Debt" ? "#FF6B5B" : DRILLDOWN_COLORS[idx % DRILLDOWN_COLORS.length]);
 
   // fixed, meaningful colors for the four top-level categories — consistent with the
@@ -3880,11 +4015,17 @@ export default function RetirementCalculator() {
   const chartStackedSeries = useMemo(() => {
     if (chartViewMode === "total") return [];
     if (chartDrilldown && drilldownMembers[chartDrilldown]?.length) {
-      return drilldownMembers[chartDrilldown].map((name, idx) => ({
+      const members = drilldownMembers[chartDrilldown].map((name, idx) => ({
         key: name,
         name,
         color: DRILLDOWN_COLORS[idx % DRILLDOWN_COLORS.length],
       }));
+      // drilling into Properties shows each property's VALUE — the mortgages owed
+      // against them belong in the same picture, as a band below zero
+      if (chartDrilldown === "_grpProperties" && hasMortgageDebt) {
+        return [...members, { key: "Debt", name: tt("Debt (mortgage)"), color: "#FF6B5B" }];
+      }
+      return members;
     }
     const groups = GROUP_SERIES.filter((g) => years.some((y) => (y[g.key] || 0) > 0));
     return hasMortgageDebt ? [...groups, { key: "Debt", name: tt("Debt (mortgage)"), color: "#FF6B5B" }] : groups;
@@ -4416,7 +4557,19 @@ export default function RetirementCalculator() {
                       <Field label={tt("Currency")}>
                         <SelectInput
                           value={item.currency || "EUR"}
-                          onChange={(v) => wizardUpdateItem("investmentsList", item.id, { currency: v })}
+                          onChange={(v) => {
+                            const newRegion = regionForCurrency(v, wizardAnswers.region);
+                            const newRd = REGION_DEFAULTS[newRegion] || REGION_DEFAULTS.EU;
+                            const oldRegion = regionForCurrency(item.currency, wizardAnswers.region);
+                            const oldRd = REGION_DEFAULTS[oldRegion] || REGION_DEFAULTS.EU;
+                            const patch = { currency: v };
+                            // only re-seed if the rate is still the old region's default —
+                            // never overwrite a number typed in by hand
+                            if (item.growthRate == null || item.growthRate === defaultGrowthRateForType(oldRd, item.type || "market")) {
+                              patch.growthRate = defaultGrowthRateForType(newRd, item.type || "market");
+                            }
+                            wizardUpdateItem("investmentsList", item.id, patch);
+                          }}
                           options={SUPPORTED_CURRENCIES.map((c) => ({ value: c, label: c }))}
                         />
                       </Field>
@@ -4528,7 +4681,7 @@ export default function RetirementCalculator() {
                                     const implied = solveMortgageYears(item.mortgageBalance || 0, item.mortgagePayment || 0, item.mortgageRate || 0);
                                     wizardUpdateItem("housesList", item.id, {
                                       mortgageInputMode: v,
-                                      mortgageYearsLeft: isFinite(implied) ? Math.round(implied * 10) / 10 : item.mortgageYearsLeft || 20,
+                                      mortgageYearsLeft: isFinite(implied) ? Math.round(implied * 10) / 10 : 20,
                                     });
                                   } else {
                                     wizardUpdateItem("housesList", item.id, { mortgageInputMode: v });
@@ -4553,7 +4706,13 @@ export default function RetirementCalculator() {
                               <Field label={tt("Years remaining")}>
                                 <NumberInput
                                   accent="#4C8DFF"
-                                  value={item.mortgageYearsLeft ?? 20}
+                                  value={
+                                    item.mortgageYearsLeft ??
+                                    (() => {
+                                      const im = solveMortgageYears(item.mortgageBalance || 0, item.mortgagePayment || 0, item.mortgageRate ?? 4.5);
+                                      return isFinite(im) ? Math.round(im * 10) / 10 : 20;
+                                    })()
+                                  }
                                   onChange={(v) => {
                                     const solved = solveMortgageRate(item.mortgageBalance || 0, item.mortgagePayment || 0, v);
                                     wizardUpdateItem("housesList", item.id, {
@@ -4568,33 +4727,24 @@ export default function RetirementCalculator() {
                         )}
                       </>
                     )}
+                    <button
+                      onClick={() => setExpandedAdvanced((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                      className="w-full flex items-center justify-between rounded-lg px-3 py-2 mb-2 text-xs font-semibold"
+                      style={{ background: "#4C8DFF14", color: "#1E4FA8" }}
+                    >
+                      <span>{tt("More options")}</span>
+                      {expandedAdvanced[item.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                    {expandedAdvanced[item.id] && (
                     <div className="grid grid-cols-2 gap-3">
-                      {wizardAnswers.customRates && (
-                        <>
-                          <Field label={tt("Growth rate")}>
-                            <SelectInput
-                              value={item.rateMode || "auto"}
-                              onChange={(v) =>
-                                wizardUpdateItem("housesList", item.id, { rateMode: v, growthRate: v === "auto" ? 3 : item.growthRate ?? 3 })
-                              }
-                              options={[
-                                { value: "auto", label: "Use default (3%)" },
-                                { value: "manual", label: tt("Set my own number") },
-                              ]}
-                            />
-                          </Field>
-                          {(item.rateMode || "auto") === "manual" && (
-                            <Field label={tt("Expected appreciation")}>
-                              <NumberInput
-                                accent="#4C8DFF"
-                                value={item.growthRate ?? 3}
-                                suffix="%/yr"
-                                onChange={(v) => wizardUpdateItem("housesList", item.id, { growthRate: v })}
-                              />
-                            </Field>
-                          )}
-                        </>
-                      )}
+                      <Field label={tt("Expected appreciation")}>
+                        <NumberInput
+                          accent="#4C8DFF"
+                          value={item.growthRate ?? (REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU).propertyReturn}
+                          suffix="%/yr"
+                          onChange={(v) => wizardUpdateItem("housesList", item.id, { growthRate: v })}
+                        />
+                      </Field>
                       {wizardAnswers.multiCurrency && (
                         <Field label={tt("Currency")}>
                           <SelectInput
@@ -4605,16 +4755,22 @@ export default function RetirementCalculator() {
                         </Field>
                       )}
                     </div>
-                    <Field label={tt("Could you sell this if you needed the money?")}>
-                      <SelectInput
-                        value={item.sellable === false ? "no" : "yes"}
-                        onChange={(v) => wizardUpdateItem("housesList", item.id, { sellable: v === "yes" })}
-                        options={[
-                          { value: "yes", label: tt("Yes — include it as a fallback") },
-                          { value: "no", label: tt("No — never sell (e.g. keep the family home)") },
-                        ]}
-                      />
-                    </Field>
+                    )}
+                    {/* A rental is always available as a fallback and its proceeds are always
+                        routed automatically (cash up to your cash ceiling, then invested) — so
+                        neither question is asked. Only the primary home gets a real choice. */}
+                    {item.usage !== "rental" && (
+                      <Field label={tt("Could you sell this if you needed the money?")}>
+                        <SelectInput
+                          value={item.sellable === false ? "no" : "yes"}
+                          onChange={(v) => wizardUpdateItem("housesList", item.id, { sellable: v === "yes" })}
+                          options={[
+                            { value: "yes", label: tt("Yes — include it as a fallback") },
+                            { value: "no", label: tt("No — never sell (e.g. keep the family home)") },
+                          ]}
+                        />
+                      </Field>
+                    )}
                     {item.sellable !== false && (() => {
                       const effAction =
                         item.usage !== "rental" && (!item.postSaleAction || item.postSaleAction === "none")
@@ -4673,31 +4829,6 @@ export default function RetirementCalculator() {
                               />
                             </Field>
                           )}
-                          {(item.usage === "rental" || effAction === "rent") && (
-                            <>
-                              <Field label={tt("What should happen to the money?")}>
-                                <SelectInput
-                                  value={item.reinvestAs || "cash"}
-                                  onChange={(v) => wizardUpdateItem("housesList", item.id, { reinvestAs: v })}
-                                  options={[
-                                    { value: "cash", label: tt("Keep as cash") },
-                                    { value: "cd", label: tt("Put it in a CD") },
-                                    { value: "market", label: tt("Invest it in the market") },
-                                  ]}
-                                />
-                              </Field>
-                              {(item.reinvestAs === "cd" || item.reinvestAs === "market") && (
-                                <Field label={item.reinvestAs === "cd" ? tt("CD interest rate") : tt("Expected market return")}>
-                                  <NumberInput
-                                    accent="#4C8DFF"
-                                    value={item.reinvestRate || 0}
-                                    suffix="%/yr"
-                                    onChange={(v) => wizardUpdateItem("housesList", item.id, { reinvestRate: v })}
-                                  />
-                                </Field>
-                              )}
-                            </>
-                          )}
                           {item.usage !== "rental" && (effAction === "rebuy" || effAction === "resize" || effAction === "rent") && (
                             <p className="text-xs text-stone-400 -mt-1">
                               This only happens once your plan actually needs the money — not on a set date.
@@ -4721,9 +4852,8 @@ export default function RetirementCalculator() {
                     mortgagePayment: 0,
                     mortgageInputMode: "rate",
                     mortgageRate: 4.5,
-                    mortgageYearsLeft: 20,
                     rent: 1200,
-                    growthRate: 3,
+                    growthRate: rd.propertyReturn,
                     currency: rd.currency,
                     sellable: true,
                     postSaleAction: "none",
@@ -4839,7 +4969,7 @@ export default function RetirementCalculator() {
                     balance: 10000,
                     contribution: 0,
                     growthRate: 6,
-                    minAge: 60,
+                    minAge: defaultRetirementMinAge(resolveTaxCountry({ region: wizardAnswers.region, taxCountry: wizardAnswers.taxCountry })),
                     taxTreatment: "pretax",
                     currency: "EUR",
                   })
@@ -4954,6 +5084,54 @@ export default function RetirementCalculator() {
                 {isLast ? tr("wizard_see_results", "See my results →") : tr("wizard_next", "Next →")}
               </button>
             </div>
+          ) : step.type === "cashlist" ? (
+            <div className="text-left">
+              {(wizardAnswers.cashList || []).map((item) => (
+                <div key={item.id} className="rounded-2xl bg-white p-3.5 mb-3 shadow-sm border border-stone-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex-1 mr-2">
+                      <Field label={tt("Name")}>
+                        <TextInput value={item.name} onChange={(v) => wizardUpdateItem("cashList", item.id, { name: v })} />
+                      </Field>
+                    </div>
+                    {(wizardAnswers.cashList || []).length > 1 && (
+                      <button onClick={() => wizardRemoveItem("cashList", item.id)} className="text-stone-300 hover:text-rose-500 shrink-0">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label={tt("Amount")}>
+                      <NumberInput accent="#3DDC97" value={item.amount} onChange={(v) => wizardUpdateItem("cashList", item.id, { amount: v })} />
+                    </Field>
+                    <Field label={tt("Currency")}>
+                      <SelectInput
+                        value={item.currency || "EUR"}
+                        onChange={(v) => wizardUpdateItem("cashList", item.id, { currency: v })}
+                        options={SUPPORTED_CURRENCIES.map((cc) => ({ value: cc, label: cc }))}
+                      />
+                    </Field>
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={() => {
+                  const rd = REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU;
+                  wizardAddItem("cashList", { name: "Cash", amount: 0, currency: rd.currency });
+                }}
+                className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
+                style={{ background: "#3DDC971A", color: "#1B7A4C" }}
+              >
+                + {tt("Add another cash account")}
+              </button>
+              <button
+                onClick={goNext}
+                className="w-full rounded-full py-3.5 font-semibold text-white"
+                style={{ background: "linear-gradient(90deg, #4C8DFF, #7C5CFC)" }}
+              >
+                {isLast ? tr("wizard_see_results", "See my results →") : tr("wizard_next", "Next →")}
+              </button>
+            </div>
           ) : step.type === "summary" ? (
             <div className="text-left">
               {(() => {
@@ -5001,7 +5179,13 @@ export default function RetirementCalculator() {
                       value={`${fmt(a.monthlyExpenses || 0, rd.currency)} / month`}
                       editId="monthlyExpenses"
                     />
-                    <Row label="Cash on hand" value={fmt(a.cash || 0, cashCcy)} editId="cash" />
+                    <Row
+                      label="Cash on hand"
+                      value={(a.cashList || []).length
+                        ? (a.cashList || []).map((x) => fmt(x.amount || 0, x.currency || cashCcy)).join(" + ")
+                        : fmt(a.cash || 0, cashCcy)}
+                      editId="cashList"
+                    />
                     <Row
                       label="Investments"
                       value={
@@ -5855,29 +6039,53 @@ is shown in today's terms.`,
                         <table className="w-full text-[11px] border-collapse">
                           <thead>
                             <tr className="text-left text-stone-400 border-b border-stone-200">
-                              <th className="py-1.5 px-1 font-medium">Income tax bracket ({symbol})</th>
-                              <th className="py-1.5 px-1 font-medium text-right">Rate</th>
+                              <th className="py-1.5 px-1 font-medium">Band ({symbol})</th>
+                              <th className="py-1.5 px-1 font-medium text-right">Income tax</th>
+                              {!!table.salaryOnlyAddOn && <th className="py-1.5 px-1 font-medium text-right">+ social</th>}
+                              {!!table.salaryOnlyAddOn && <th className="py-1.5 px-1 font-medium text-right">On salary</th>}
                             </tr>
                           </thead>
                           <tbody>
-                            {rows.map((row, idx) => (
-                              <tr key={idx} className="border-b border-stone-100">
-                                <td className="py-1.5 px-1">
-                                  {symbol}
-                                  {Math.round(row.from).toLocaleString("en-US")} –{" "}
-                                  {row.to === Infinity ? "up" : symbol + Math.round(row.to).toLocaleString("en-US")}
-                                </td>
-                                <td className="py-1.5 px-1 text-right">{row.rate}%</td>
-                              </tr>
-                            ))}
+                            {rows.map((row, idx) => {
+                              // the social-charge rate that applies to earnings INSIDE this band —
+                              // sampled just below the band's top (or just above its floor for the
+                              // open-ended top band), since social charges are themselves banded
+                              const probe = row.to === Infinity ? row.from * 1.5 + 1000 : (row.from + row.to) / 2;
+                              const socialMarginal = (() => {
+                                const a = table.salaryOnlyAddOn;
+                                if (!a) return 0;
+                                if (!Array.isArray(a)) return a;
+                                let lo = 0;
+                                for (const b of a) {
+                                  if (probe <= b.upTo) return b.rate;
+                                  lo = b.upTo;
+                                }
+                                return a[a.length - 1].rate;
+                              })();
+                              // income tax is charged on what's LEFT after social charges, so the
+                              // combined bite on a euro of salary in this band is not a simple sum
+                              const combined = socialMarginal + (row.rate * (100 - socialMarginal)) / 100;
+                              return (
+                                <tr key={idx} className="border-b border-stone-100">
+                                  <td className="py-1.5 px-1">
+                                    {symbol}
+                                    {Math.round(row.from).toLocaleString("en-US")} –{" "}
+                                    {row.to === Infinity ? "up" : symbol + Math.round(row.to).toLocaleString("en-US")}
+                                  </td>
+                                  <td className="py-1.5 px-1 text-right">{row.rate}%</td>
+                                  {!!table.salaryOnlyAddOn && <td className="py-1.5 px-1 text-right text-stone-400">{round2(socialMarginal)}%</td>}
+                                  {!!table.salaryOnlyAddOn && (
+                                    <td className="py-1.5 px-1 text-right font-semibold">{Math.round(combined)}%</td>
+                                  )}
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
                       <p className="text-[11px] text-stone-400 leading-relaxed pl-0.5">
                         {table.salaryOnlyAddOn
-                          ? `Plus a mandatory salary-only social-insurance add-on (${
-                              Array.isArray(table.salaryOnlyAddOn) ? "banded, up to " + table.salaryOnlyAddOn[table.salaryOnlyAddOn.length - 2]?.rate + "%" : table.salaryOnlyAddOn + "%"
-                            }) — applies only to a paycheck, never to a pension, rent, or interest. `
+                          ? `"On salary" is what a euro earned in that band actually loses: social charges come off first, then income tax is charged on what remains — so it's not a simple sum of the two columns. Social charges apply ONLY to a paycheck, never to a pension, rent, or interest, so a retiree pays just the income-tax column. `
                           : ""}
                         Dividends and capital gains are taxed separately from this table — see the sections above for
                         exactly how each works in this country. Single filer, no dependents, {table.label.includes("2025") ? "2025" : "current"} figures.
@@ -6558,18 +6766,24 @@ is shown in today's terms.`,
               <div>
                 {cash.map((c) => (
                   <div key={c.id} className="rounded-2xl bg-white p-3.5 shadow-sm mb-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex-1 mr-2">
-                        <Field label={tt("Name")}>
-                          <TextInput value={c.name} onChange={(v) => updateCashAccount(c.id, { name: v })} />
-                        </Field>
-                      </div>
+                    <div className="flex items-center justify-between">
+                      <button onClick={() => toggleCard(c.id)} className="flex items-center gap-1.5 flex-1 text-left min-w-0">
+                        {expandedCards[c.id] ? <ChevronUp size={14} color={SECTION_COLORS.cash} /> : <ChevronDown size={14} color={SECTION_COLORS.cash} />}
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: SECTION_COLORS.cash }} />
+                        <span className="text-sm font-semibold text-stone-700 truncate">{c.name || "Cash"}</span>
+                        <span className="text-xs text-stone-400 shrink-0 ml-auto mr-2">{fmt(c.amount, c.currency || currency)}</span>
+                      </button>
                       {cash.length > 1 && (
                         <button onClick={() => removeCashAccount(c.id)} className="text-stone-300 hover:text-rose-500 shrink-0">
                           <Trash2 size={15} />
                         </button>
                       )}
                     </div>
+                    {expandedCards[c.id] && (
+                    <>
+                    <Field label={tt("Name")}>
+                      <TextInput value={c.name} onChange={(v) => updateCashAccount(c.id, { name: v })} />
+                    </Field>
                     <div className="grid grid-cols-2 gap-3">
                       <Field label={tt("Cash on hand")}>
                         <NumberInput accent={SECTION_COLORS.cash} value={c.amount} onChange={(v) => updateCashAccount(c.id, { amount: v })} />
@@ -6592,6 +6806,8 @@ is shown in today's terms.`,
                         />
                       </Field>
                     </div>
+                    </>
+                    )}
                   </div>
                 ))}
                 <button
@@ -6658,6 +6874,85 @@ is shown in today's terms.`,
                 </p>
               </div>
             )}
+            {activeSection === "cash" && (
+              <div className="mt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: "#8A81A6" }}>
+                  {tt("One-off amounts")}
+                </h3>
+                <p className="text-xs text-stone-500 mb-3">
+                  A one-time amount received (positive) or paid (negative) at a specific age — an inheritance, a
+                  bonus, a wedding, a tax bill, moving costs, and so on.
+                </p>
+                {lumpSums.map((ls, idx) => {
+                  const color = SECTION_COLORS.lumpsums;
+                  const magnitude = Math.abs(ls.amount || 0);
+                  const type = (ls.amount || 0) < 0 ? "pay" : "receive";
+                  const outOfRange = Math.round(ls.age) < profile.currentAge || Math.round(ls.age) > profile.lifeExpectancy;
+                  return (
+                    <div key={ls.id} className="rounded-xl bg-white p-3.5 mb-3 shadow-sm" style={{ borderLeft: `4px solid ${color}` }}>
+                      <div className="flex items-center justify-between">
+                        <button onClick={() => toggleCard(ls.id)} className="flex items-center gap-1.5 flex-1 text-left min-w-0">
+                          {expandedCards[ls.id] ? <ChevronUp size={14} color={color} /> : <ChevronDown size={14} color={color} />}
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                          <span className="text-sm font-semibold text-stone-700 truncate">{ls.name || `Lump sum ${idx + 1}`}</span>
+                          <span className="text-xs text-stone-400 shrink-0 ml-auto mr-2">
+                            {type === "pay" ? "−" : "+"}
+                            {fmt(magnitude, currency)} @ {Math.round(ls.age)}
+                          </span>
+                        </button>
+                        <button onClick={() => removeLumpSum(ls.id)} className="text-stone-300 hover:text-rose-500 shrink-0">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                      {expandedCards[ls.id] && (
+                      <div className="mt-3">
+                      <Field label={tt("Name")}>
+                        <TextInput value={ls.name} onChange={(v) => updateLumpSum(ls.id, { name: v })} />
+                      </Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label={tt("At age")}>
+                          <NumberInput accent={color} value={ls.age} onChange={(v) => updateLumpSum(ls.id, { age: v })} />
+                        </Field>
+                        <Field label={tt("Type")}>
+                          <SelectInput
+                            value={type}
+                            onChange={(v) => updateLumpSum(ls.id, { amount: (v === "pay" ? -1 : 1) * magnitude })}
+                            options={[
+                              { value: "receive", label: tt("Receive") },
+                              { value: "pay", label: tt("Pay") },
+                            ]}
+                          />
+                        </Field>
+                      </div>
+                      <Field label={tt("Amount")}>
+                        <NumberInput
+                          accent={color}
+                          value={magnitude}
+                          suffix={currency}
+                          onChange={(v) => updateLumpSum(ls.id, { amount: (type === "pay" ? -1 : 1) * Math.abs(v) })}
+                        />
+                      </Field>
+                      {outOfRange && (
+                        <div className="rounded-lg px-2.5 py-2 text-[11px] font-medium" style={{ background: "#FFF1EC", color: "#B23A22" }}>
+                          ⚠️ Age {Math.round(ls.age)} is outside your simulated range ({profile.currentAge}–
+                          {profile.lifeExpectancy}), so this lump sum is being ignored.
+                        </div>
+                      )}
+                      </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <button
+                  onClick={addLumpSum}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-full text-sm font-semibold py-3"
+                  style={{ background: `${SECTION_COLORS.lumpsums}1A`, color: "#0369A1" }}
+                >
+                  <Plus size={15} /> Add lump sum
+                </button>
+                <p className="text-xs text-stone-400 mt-3">Lump sums are added or subtracted at face value — not taxed or inflation-adjusted.</p>
+              </div>
+            )}
 
             {activeSection === "investments" && (
               <div>
@@ -6672,15 +6967,21 @@ is shown in today's terms.`,
                       className="rounded-xl bg-white p-3.5 mb-3 shadow-sm"
                       style={{ borderLeft: `4px solid ${color}` }}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color }}>
-                          <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-                          Investment {idx + 1}
-                        </span>
-                        <button onClick={() => removeInvestment(inv.id)} className="text-stone-300 hover:text-rose-500">
+                      <div className="flex items-center justify-between">
+                        <button onClick={() => toggleCard(inv.id)} className="flex items-center gap-1.5 flex-1 text-left min-w-0">
+                          {expandedCards[inv.id] ? <ChevronUp size={14} color={color} /> : <ChevronDown size={14} color={color} />}
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                          <span className="text-sm font-semibold text-stone-700 truncate">{inv.name || `Investment ${idx + 1}`}</span>
+                          <span className="text-xs text-stone-400 shrink-0 ml-auto mr-2">
+                            {fmt(inv.type === "house" ? Math.max(0, inv.amount - (inv.mortgageBalance || 0)) : inv.amount, inv.currency || currency)}
+                          </span>
+                        </button>
+                        <button onClick={() => removeInvestment(inv.id)} className="text-stone-300 hover:text-rose-500 shrink-0">
                           <Trash2 size={15} />
                         </button>
                       </div>
+                      {expandedCards[inv.id] && (
+                      <div className="mt-3">
                       <Field label={tt("Name")}>
                         <TextInput value={inv.name} onChange={(v) => updateInvestment(inv.id, { name: v })} />
                       </Field>
@@ -6748,14 +7049,6 @@ is shown in today's terms.`,
                         })()}
                         {inv.type === "cd" && (
                           <>
-                            <Field label={tt("Locked in for")}>
-                              <NumberInput
-                                accent={color}
-                                value={inv.cdTenorYears ?? 1}
-                                suffix="yrs"
-                                onChange={(v) => updateInvestment(inv.id, { cdTenorYears: v })}
-                              />
-                            </Field>
                             <Field label={tt("Long-run rate (once it converges)")}>
                               <NumberInput
                                 accent={color}
@@ -7202,6 +7495,8 @@ is shown in today's terms.`,
                           )}
                         </>
                       )}
+                      </div>
+                      )}
                     </div>
                   );
                 })}
@@ -7334,15 +7629,19 @@ is shown in today's terms.`,
                       className="rounded-xl bg-white p-3.5 mb-3 shadow-sm"
                       style={{ borderLeft: `4px solid ${color}` }}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color }}>
-                          <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-                          Account {idx + 1}
-                        </span>
-                        <button onClick={() => removeRetirement(r.id)} className="text-stone-300 hover:text-rose-500">
+                      <div className="flex items-center justify-between">
+                        <button onClick={() => toggleCard(r.id)} className="flex items-center gap-1.5 flex-1 text-left min-w-0">
+                          {expandedCards[r.id] ? <ChevronUp size={14} color={color} /> : <ChevronDown size={14} color={color} />}
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                          <span className="text-sm font-semibold text-stone-700 truncate">{r.name || `Account ${idx + 1}`}</span>
+                          <span className="text-xs text-stone-400 shrink-0 ml-auto mr-2">{fmt(r.amount, r.currency || currency)}</span>
+                        </button>
+                        <button onClick={() => removeRetirement(r.id)} className="text-stone-300 hover:text-rose-500 shrink-0">
                           <Trash2 size={15} />
                         </button>
                       </div>
+                      {expandedCards[r.id] && (
+                      <div className="mt-3">
                       <Field label={tt("Name")}>
                         <TextInput value={r.name} onChange={(v) => updateRetirement(r.id, { name: v })} />
                       </Field>
@@ -7425,6 +7724,8 @@ is shown in today's terms.`,
                           </div>
                         </>
                       )}
+                      </div>
+                      )}
                     </div>
                   );
                 })}
@@ -7438,70 +7739,6 @@ is shown in today's terms.`,
               </div>
             )}
 
-            {activeSection === "lumpsums" && (
-              <div>
-                <p className="text-xs text-stone-500 mb-3">
-                  A one-time amount received (positive) or paid (negative) at a specific age — an inheritance, a
-                  bonus, a wedding, a tax bill, moving costs, and so on.
-                </p>
-                {lumpSums.map((ls, idx) => {
-                  const color = SECTION_COLORS.lumpsums;
-                  const magnitude = Math.abs(ls.amount || 0);
-                  const type = (ls.amount || 0) < 0 ? "pay" : "receive";
-                  const outOfRange = Math.round(ls.age) < profile.currentAge || Math.round(ls.age) > profile.lifeExpectancy;
-                  return (
-                    <div key={ls.id} className="rounded-xl bg-white p-3.5 mb-3 shadow-sm" style={{ borderLeft: `4px solid ${color}` }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-stone-400">Lump sum {idx + 1}</span>
-                        <button onClick={() => removeLumpSum(ls.id)} className="text-stone-300 hover:text-rose-500">
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                      <Field label={tt("Name")}>
-                        <TextInput value={ls.name} onChange={(v) => updateLumpSum(ls.id, { name: v })} />
-                      </Field>
-                      <div className="grid grid-cols-2 gap-3">
-                        <Field label={tt("At age")}>
-                          <NumberInput accent={color} value={ls.age} onChange={(v) => updateLumpSum(ls.id, { age: v })} />
-                        </Field>
-                        <Field label={tt("Type")}>
-                          <SelectInput
-                            value={type}
-                            onChange={(v) => updateLumpSum(ls.id, { amount: (v === "pay" ? -1 : 1) * magnitude })}
-                            options={[
-                              { value: "receive", label: tt("Receive") },
-                              { value: "pay", label: tt("Pay") },
-                            ]}
-                          />
-                        </Field>
-                      </div>
-                      <Field label={tt("Amount")}>
-                        <NumberInput
-                          accent={color}
-                          value={magnitude}
-                          suffix={currency}
-                          onChange={(v) => updateLumpSum(ls.id, { amount: (type === "pay" ? -1 : 1) * Math.abs(v) })}
-                        />
-                      </Field>
-                      {outOfRange && (
-                        <div className="rounded-lg px-2.5 py-2 text-[11px] font-medium" style={{ background: "#FFF1EC", color: "#B23A22" }}>
-                          ⚠️ Age {Math.round(ls.age)} is outside your simulated range ({profile.currentAge}–
-                          {profile.lifeExpectancy}), so this lump sum is being ignored.
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                <button
-                  onClick={addLumpSum}
-                  className="w-full flex items-center justify-center gap-1.5 rounded-full text-sm font-semibold py-3"
-                  style={{ background: `${SECTION_COLORS.lumpsums}1A`, color: "#0369A1" }}
-                >
-                  <Plus size={15} /> Add lump sum
-                </button>
-                <p className="text-xs text-stone-400 mt-3">Lump sums are added or subtracted at face value — not taxed or inflation-adjusted.</p>
-              </div>
-            )}
 
             {activeSection === "order" && (
               <div>
@@ -7561,33 +7798,22 @@ is shown in today's terms.`,
         </div>
       ) : tab === "results" ? (
         <div className="px-5 py-5">
-          {(() => {
-            const target = profile.lifeExpectancy;
-            let kind, params, positive;
-            if (ranOutAge) {
-              kind = "runsOut";
-              params = { age: ranOutAge, yearsShort: Math.max(1, target - ranOutAge), target };
-              positive = false;
-            } else if (fiAge != null) {
-              kind = "stopAt";
-              params = { stopAge: Math.floor(fiAge), target };
-              positive = true;
-            } else {
-              kind = "lasts";
-              params = { target };
-              positive = true;
-            }
-            return (
-              <div
-                className="rounded-2xl p-4 mb-3"
-                style={positive ? { background: "linear-gradient(120deg, #E9FBF2, #EAF3FF)" } : { background: "#FFF1EC" }}
-              >
-                <p className="text-sm font-semibold leading-snug" style={{ color: positive ? "#1B7A4C" : "#B23A22" }}>
-                  {trPlanSummary(language, kind, params)}
-                </p>
-              </div>
-            );
-          })()}
+          {ranOutAge ? (
+            <div className="rounded-2xl px-4 py-3.5 mb-3 text-sm font-semibold" style={{ background: "#FFF1EC", color: "#B23A22" }}>
+              {trPlanSummary(language, "runsOut", {
+                age: ranOutAge,
+                yearsShort: Math.max(1, profile.lifeExpectancy - ranOutAge),
+                target: profile.lifeExpectancy,
+              })}
+            </div>
+          ) : (
+            <div className="rounded-2xl px-4 py-3.5 mb-3 text-sm font-semibold" style={{ background: "#E9FBF2", color: "#1B7A4C" }}>
+              🎉{" "}
+              {fiAge != null
+                ? trPlanSummary(language, "stopAt", { stopAge: Math.floor(fiAge), target: profile.lifeExpectancy })
+                : trPlanSummary(language, "lasts", { target: profile.lifeExpectancy })}
+            </div>
+          )}
           <div className="rounded-2xl bg-white p-3.5 shadow-sm">
             <div className="flex items-center justify-between gap-2 mb-2">
               <h2 className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
@@ -7625,25 +7851,6 @@ is shown in today's terms.`,
                 </button>
               ))}
             </div>
-            {/* one short, plain sentence always visible — everything else (the debt-band
-                nuance, the "why does this matter" reasoning, per-mode notes) is one tap
-                away instead of always taking up space */}
-            <p className="text-xs text-stone-500 mb-1">{realTermsView ? tr("chart_short_real") : tr("chart_short_nominal")}</p>
-            <button
-              onClick={() => setShowChartDetails((v) => !v)}
-              className="flex items-center gap-1 text-[11px] font-medium mb-2"
-              style={{ color: "#7C5CFC" }}
-            >
-              {showChartDetails ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              {tr("details_label", "Details")}
-            </button>
-            {showChartDetails && (
-              <p className="text-xs text-stone-400 mb-3 -mt-1">
-                {realTermsView ? tr("chart_note_real") : tr("chart_note_nominal")} {tr("chart_tap_hint")}
-                {chartViewMode === "total" && ` ${tr("chart_total_note")}`}
-                {chartViewMode === "breakdown" && hasMortgageDebt && ` ${tr("chart_debt_note")}`}
-              </p>
-            )}
             {chartViewMode === "breakdown" && (
               <div className="mb-2">
                 <SelectInput
@@ -7670,7 +7877,7 @@ is shown in today's terms.`,
               >
                 <defs>
                   {chartStackedSeries.map((s) => (
-                    <linearGradient key={s.key} id={`fill-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient key={s.key} id={gradId(s.key)} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={s.color} stopOpacity={s.key === "Debt" ? 0.55 : 0.7} />
                       <stop offset="95%" stopColor={s.color} stopOpacity={s.key === "Debt" ? 0.15 : 0.08} />
                     </linearGradient>
@@ -7699,7 +7906,7 @@ is shown in today's terms.`,
                     stackId="1"
                     stroke={s.color}
                     strokeWidth={1.5}
-                    fill={`url(#fill-${s.key})`}
+                    fill={`url(#${gradId(s.key)})`}
                   />
                 ))}
 
@@ -7900,53 +8107,6 @@ is shown in today's terms.`,
             </div>
           </div>
 
-          {ranOutAge ? (
-            <div className="mt-4 rounded-2xl px-4 py-3.5 text-sm" style={{ background: "#FFF1EC", color: "#B23A22" }}>
-              At the current assumptions, funds run out at age {ranOutAge} — {profile.lifeExpectancy - ranOutAge}{" "}
-              years before your life expectancy.
-            </div>
-          ) : (
-            <div className="mt-4 rounded-2xl px-4 py-3.5 text-sm" style={{ background: "#E9FBF2", color: "#1B7A4C" }}>
-              🎉 Your money lasts through your full life expectancy at these assumptions.
-            </div>
-          )}
-
-          <div className="mt-4 text-xs text-stone-400 leading-relaxed">
-            Assumptions: withdrawals follow the exact order set on the Inputs tab — every individual investment,
-            retirement account, and sellable property has its own place in that list, not just a category. A
-            locked retirement account (below its minimum age, early access off) is skipped entirely until it
-            unlocks, and a "taxed when withdrawn" account is grossed up so tax (and any early-withdrawal penalty)
-            comes out of that account, not your other buckets. A pension, if enabled, pays out as taxed income
-            from its start age based on your last working salary.
-            <strong> Investment contributions, retirement contributions, and mortgage payments all stop the year
-            "years still working" runs out.</strong> Net worth counts each house as equity (current value minus
-            remaining mortgage balance); a house marked "not sellable" is never drawn down. When a sellable house
-            with a post-sale plan (rebuy, resize, or rent) is tapped, 100% of its equity is liquidated that year —
-            not just what's needed — and the plan takes effect immediately; a house with no plan is drawn down
-            gradually instead. If you chose "rent" or "take the cash" and asked to reinvest the leftover in a CD
-            or the market, that money keeps growing at the rate you set and stays available for future
-            withdrawals — it just keeps the sold property's name and color on the chart, since it's the same
-            underlying bucket repurposed rather than a brand-new one. Selling home equity is taxed only on the
-            gain above its purchase price. Rental income and post-sale rent both grow with inflation every year;
-            mortgage payments never do — a floating-rate mortgage's interest cost still follows your Cash
-            section's rate. Monthly expenses exclude mortgage payments — and, if you've switched it on in Income
-            & Expenses, they can also decline in real terms through retirement (see the Info page for the
-            research). Cash interest is taxed every year it's
-            earned. A market or dividend investment stays untaxed while it grows and is only taxed — on the gain
-            above the cost basis you set, not the whole amount — when you actually sell some of it. The tax rate
-            is a flat average, not marginal brackets. Lump sums hit as a single cash event in the year they
-            occur, untaxed and not inflation-adjusted. Any bucket set to a different currency than your base
-            currency (Profile tab) is converted using live exchange rates when available, or an approximate
-            offline table if not — check the Profile tab to see which is active. Your "keep at least" cash
-            minimum (Cash tab) is treated as an emergency reserve — it's never drawn down to cover a shortfall,
-            only the cash above that floor is. If a year's costs still can't be covered and you own a mortgaged
-            property, that property is force-sold that year — you can't stop paying a mortgage and keep the
-            house. Sale proceeds (after the agency fee and tax on the gain) go toward the gap, and if it was your
-            home, a rent cost replaces the old mortgage payment. Nothing is ever invented to fill a remaining
-            gap; the year-by-year breakdown flags every forced sale explicitly. A pension can optionally rise
-            with inflation (the default) or stay fixed in nominal terms forever. Growth is applied once per year,
-            before that year's withdrawals.
-          </div>
         </div>
       ) : tab === "whatif" ? (
         <div className="px-5 py-5">
