@@ -67,7 +67,6 @@ const PHRASES = {
   "Currency": { fr: "Devise", it: "Valuta" },
   "Current age": { fr: "Âge actuel", it: "Età attuale" },
   "Current balance": { fr: "Solde actuel", it: "Saldo attuale" },
-  "Current estimate, at today's salary": { fr: "Estimation actuelle, au salaire d'aujourd'hui", it: "Stima attuale, allo stipendio odierno" },
   "Current market value": { fr: "Valeur marchande actuelle", it: "Valore di mercato attuale" },
   "Current value": { fr: "Valeur actuelle", it: "Valore attuale" },
   "Deposit funded from": { fr: "Apport financé par", it: "Acconto finanziato da" },
@@ -212,15 +211,24 @@ const PHRASES = {
   "All categories": { fr: "Toutes les catégories", it: "Tutte le categorie" },
   "More options": { fr: "Plus d'options", it: "Altre opzioni" },
   "One-off amounts": { fr: "Montants ponctuels", it: "Importi una tantum" },
+  "Show the maths": { fr: "Voir les formules", it: "Vedi le formule" },
+  "Estimate": { fr: "Estimation", it: "Stima" },
+  "income tax": { fr: "d'impôt sur le revenu", it: "di imposta sul reddito" },
+  "Your average effective rate, not your top bracket. Full explanation on the Info page.": {
+    fr: "Votre taux effectif moyen, pas votre tranche supérieure. Explication complète sur la page Infos.",
+    it: "La tua aliquota media effettiva, non il tuo scaglione più alto. Spiegazione completa nella pagina Info.",
+  },
+  "Default": { fr: "Par défaut", it: "Predefinito" },
+  "Enter my own": { fr: "Saisir ma valeur", it: "Inserisci il mio valore" },
+  "Re-sort by size (smallest first)": { fr: "Retrier par taille (plus petit d'abord)", it: "Riordina per dimensione (dal più piccolo)" },
+  "Balances change as your plan runs, so this order can drift. Re-sorting draws down smaller pots first and always leaves your primary home last.": {
+    fr: "Les soldes évoluent au fil du plan, donc cet ordre peut se décaler. Le retri puise d'abord dans les plus petits comptes et laisse toujours votre résidence principale en dernier.",
+    it: "I saldi cambiano nel corso del piano, quindi quest'ordine può disallinearsi. Il riordino attinge prima dai conti più piccoli e lascia sempre la tua abitazione principale per ultima.",
+  },
   "show split": { fr: "voir le détail", it: "vedi dettaglio" },
-  "of your salary, in total": { fr: "de votre salaire, au total", it: "del tuo stipendio, in totale" },
   "then": { fr: "puis", it: "poi" },
   "income tax on what's left": { fr: "d'impôt sur le revenu sur ce qui reste", it: "di imposta sul reddito su ciò che resta" },
   "social charges": { fr: "de charges sociales", it: "di contributi sociali" },
-  "Social charges apply to salary only — not to a pension, rent, or interest.": {
-    fr: "Les charges sociales s'appliquent au salaire uniquement — pas à une pension, un loyer ou des intérêts.",
-    it: "I contributi sociali si applicano solo allo stipendio — non a pensione, affitto o interessi.",
-  },
 };
 const STRINGS = {
   en: {
@@ -233,7 +241,6 @@ const STRINGS = {
     net_worth_today: "Net worth today",
     funds_run_out: "Funds run out",
     money_lasts_to: "Money lasts to",
-    edit_profile: "Edit profile",
     reset_profile: "Reset profile",
     section_profile: "Profile",
     section_income: "Income & expenses",
@@ -279,6 +286,7 @@ const STRINGS = {
     wizard_next: "Next →",
     wizard_see_results: "See my results →",
     wizard_back: "← Back",
+    wizard_back_label: "Back",
     chart_header: "Balance by bucket, per year",
     toggle_future: "Future $",
     toggle_today: "Today's $",
@@ -350,7 +358,6 @@ const STRINGS = {
     net_worth_today: "Patrimoine net aujourd'hui",
     funds_run_out: "Fonds épuisés",
     money_lasts_to: "L'argent dure jusqu'à",
-    edit_profile: "Modifier le profil",
     reset_profile: "Réinitialiser le profil",
     section_profile: "Profil",
     section_income: "Revenus et dépenses",
@@ -396,6 +403,7 @@ const STRINGS = {
     wizard_next: "Suivant →",
     wizard_see_results: "Voir mes résultats →",
     wizard_back: "← Retour",
+    wizard_back_label: "Retour",
     chart_header: "Solde par catégorie, par an",
     toggle_future: "$ futurs",
     toggle_today: "$ d'aujourd'hui",
@@ -467,7 +475,6 @@ const STRINGS = {
     net_worth_today: "Patrimonio netto oggi",
     funds_run_out: "Fondi esauriti",
     money_lasts_to: "I soldi durano fino a",
-    edit_profile: "Modifica profilo",
     reset_profile: "Reimposta profilo",
     section_profile: "Profilo",
     section_income: "Entrate e spese",
@@ -513,6 +520,7 @@ const STRINGS = {
     wizard_next: "Avanti →",
     wizard_see_results: "Vedi i miei risultati →",
     wizard_back: "← Indietro",
+    wizard_back_label: "Indietro",
     chart_header: "Saldo per categoria, per anno",
     toggle_future: "$ futuri",
     toggle_today: "$ di oggi",
@@ -964,6 +972,105 @@ function buildExplainLines(d, currency, lumpSumEvents) {
 }
 
 const PALETTE = ["#3DDC97", "#FFB443", "#4C8DFF", "#FF6B5B", "#7C5CFC", "#FF5C93", "#28C7C7", "#F2545B", "#B98CFF"];
+
+// ---------------------------------------------------------------------------------
+// Info page structure. Every topic has a stable `id` so other parts of the app can deep
+// link straight to it (see openInfoTopic), and belongs to a `section` so the page reads
+// as an organised reference rather than one long scroll. Titles are matched on the
+// English title string, which is what the content arrays already key off.
+const INFO_SECTIONS = [
+  { id: "basics", label: "How the plan is calculated" },
+  { id: "tax", label: "Tax" },
+  { id: "property", label: "Property & mortgages" },
+  { id: "money", label: "Cash, currency & inflation" },
+  { id: "reference", label: "Reference tables" },
+];
+// maps an English topic title -> { id, section }
+const INFO_TOPIC_META = {
+  "The year-by-year simulation": { id: "simulation", section: "basics" },
+  "Growth, every single year": { id: "growth", section: "basics" },
+  "State pension if you retire early": { id: "pension", section: "basics" },
+  "Where surplus (or a windfall) goes": { id: "surplus", section: "basics" },
+  "Spending decline with age (optional)": { id: "spending-decline", section: "basics" },
+
+  "Average tax rate — worked out automatically ('Auto' mode)": { id: "tax-rate", section: "tax" },
+  "Your average tax rate — automatic, or your own number": { id: "tax-rate", section: "tax" },
+  "Capital gains — its own rate, by country": { id: "capital-gains", section: "tax" },
+  "Capital gains — why it's not the same as your income tax rate": { id: "capital-gains", section: "tax" },
+  "Taxes on withdrawals": { id: "withdrawal-tax", section: "tax" },
+
+  "Mortgages — locked amortization schedule": { id: "mortgages", section: "property" },
+  "Mortgages — a locked payment schedule": { id: "mortgages", section: "property" },
+  "Selling a house (always 100%, never partial)": { id: "selling-house", section: "property" },
+  "Selling a house — and the primary-residence tax break": { id: "selling-house", section: "property" },
+
+  "Currency conversion": { id: "currency", section: "money" },
+  "Multiple currencies": { id: "currency", section: "money" },
+};
+// topics whose title is built dynamically fall back to this
+function infoTopicMeta(title) {
+  if (INFO_TOPIC_META[title]) return INFO_TOPIC_META[title];
+  if (String(title).includes("Today's $")) return { id: "real-vs-nominal", section: "money" };
+  return { id: String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40), section: "basics" };
+}
+
+// The maths behind each topic, written as MATHS — not as code. Plain-language variable
+// names, no internal identifiers, and a one-line explanation per formula. Shown in a
+// small popup from the topic it belongs to, rather than as one wall of black text.
+const MATH_BY_TOPIC = {
+  simulation: [
+    { expr: "leftover  =  income  −  spending", note: "Everything coming in that year, minus everything going out." },
+    { expr: "if leftover < 0 :  sell assets to cover the gap", note: "Shortfalls are met by drawing from your accounts, in the order you set." },
+  ],
+  growth: [
+    { expr: "next year  =  this year  ×  (1 + rate)  +  contributions", note: "Each pot compounds at its own rate, then that year's contributions are added." },
+    { expr: "after n years  =  start  ×  (1 + rate)ⁿ", note: "Left untouched, that is simply compound growth." },
+    { expr: "cautious rate  ≈  historical average  −  3", note: "Defaults sit roughly at a 25th-percentile decade rather than the long-run average." },
+  ],
+  pension: [
+    { expr: "pension  =  final salary  ×  %  ×  ( years worked ÷ years for a full pension )", note: "Stopping early scales the pension down proportionally." },
+    { expr: "indexed pension  =  pension  ×  (1 + inflation)^years since it started", note: "Only if you've marked it as inflation-linked." },
+  ],
+  surplus: [
+    { expr: "if cash < floor :  all of it goes to cash", note: "Rebuild the emergency buffer first." },
+    { expr: "if cash > ceiling :  all of it is invested", note: "Above the ceiling, extra cash is put to work." },
+    { expr: "otherwise :  split by your chosen %", note: "In between, it divides according to the percentage you set." },
+  ],
+  "spending-decline": [
+    { expr: "years 1–10 :  spending falls ≈ 1% a year", note: "Real living costs, excluding rent or mortgage." },
+    { expr: "years 11–19 :  falls ≈ 2% a year", note: "The decline steepens through the middle of retirement." },
+    { expr: "after that :  flat", note: "It levels off rather than falling forever." },
+  ],
+  "tax-rate": [
+    { expr: "take-home  =  ( salary − social charges )  ×  (1 − income tax rate)", note: "Social charges come off first; income tax then applies to what's left. They are not added together." },
+    { expr: "average rate  =  total tax owed  ÷  total income", note: "This is your effective rate across all bands — not the rate of your top band." },
+    { expr: "tax owed  =  Σ over bands  ( income in that band × that band's rate )", note: "Each slice of income is taxed at its own band's rate." },
+  ],
+  "capital-gains": [
+    { expr: "taxable gain  =  sale price  −  what you paid", note: "Only the growth is taxed, never the original amount." },
+    { expr: "UK :  18% or 24%, by income band", note: "Capital gains has its own schedule, separate from income tax." },
+    { expr: "Canada :  only ½ of the gain is taxable", note: "Which works out as half your ordinary rate." },
+  ],
+  "withdrawal-tax": [
+    { expr: "amount to withdraw  =  what you need  ÷  (1 − tax rate)", note: "Grossed up so the tax comes out of the withdrawal itself and you still net what you needed." },
+    { expr: "taxed fraction  =  ( value − what you paid )  ÷  value", note: "Selling part of an investment only taxes the gain portion of it." },
+  ],
+  mortgages: [
+    { expr: "monthly payment  =  balance × i  ÷  ( 1 − (1 + i)⁻ⁿ )", note: "The standard annuity formula. i is the monthly rate, n the number of months." },
+    { expr: "interest this month  =  balance  ×  monthly rate", note: "The rest of the payment reduces the balance." },
+    { expr: "balance falls to zero at exactly month n", note: "The whole schedule is fixed up front, so the loan ends on time." },
+  ],
+  "selling-house": [
+    { expr: "you receive  =  value  −  mortgage  −  fees  −  tax on the gain", note: "A property is always sold whole, never in part." },
+    { expr: "taxable gain  =  ( sale price − what you paid )  −  exemption", note: "Most countries exempt some or all of the gain on your main home." },
+  ],
+  currency: [
+    { expr: "converted  =  amount  ×  ( rate of its currency ÷ rate of yours )", note: "Everything is converted into your main currency before any totals are added up." },
+  ],
+  "real-vs-nominal": [
+    { expr: "in today's money  =  future amount  ÷  (1 + inflation)^years ahead", note: "Strips inflation back out so a future figure can be compared with prices now." },
+  ],
+};
 
 const SECTION_COLORS = {
   profile: "#7C5CFC",
@@ -2157,8 +2264,12 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
           } else {
             // "rent" (or no housing plan): decide what happens to the proceeds not needed this year
             if (effectivePostSaleAction === "rent") {
-              extraRentExpenseAnnual = (inv.postSaleRent || 0) * 12;
-              saleNote.newMonthlyRent = inv.postSaleRent || 0;
+              // if no post-sale rent was ever set, fall back to a share of current living
+              // costs rather than 0 — selling your home does not make housing free
+              const fallbackRent = Math.round((monthlyExpenses || 0) * 0.35);
+              const effectivePostSaleRent = inv.postSaleRent != null && inv.postSaleRent > 0 ? inv.postSaleRent : fallbackRent;
+              extraRentExpenseAnnual = effectivePostSaleRent * 12;
+              saleNote.newMonthlyRent = effectivePostSaleRent;
             }
             inv._sold = true;
             const applied = Math.min(Math.max(cashFromSale, 0), shortfall);
@@ -2332,6 +2443,13 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
     // series below zero automatically when they share a stackId with positive ones.
     const totalMortgageDebt = invBal.reduce((s, inv) => s + (inv.type === "house" ? inv.mortgageBalance || 0 : 0), 0);
     record.Debt = -totalMortgageDebt;
+    // per-property mortgage, keyed off the property's display name, so each loan can be
+    // drawn as its own negative band in the Properties drill-down
+    invBal.forEach((inv) => {
+      if (inv.type === "house" && (inv.mortgageBalance || 0) > 0) {
+        record[`__debt__${inv.displayName}`] = -(inv.mortgageBalance || 0);
+      }
+    });
     record._grossAssets =
       Math.max(cashBal, 0) +
       invBal.reduce((s, i) => s + Math.max(i.amount, 0), 0) +
@@ -2685,6 +2803,66 @@ function parseLocaleNumber(str) {
   return parseFloat(String(str).trim().replace(",", "."));
 }
 
+// A rate field that can flip between the app's suggested default and a number you type.
+// Clearing a plain NumberInput left you stranded on 0 with no way back to the default —
+// this keeps the default one tap away for every rate that has one. The stored value is
+// always a real number, so the simulation reads it exactly as before; "default" simply
+// means "currently equal to the suggested value".
+// A compact "(i)" that reveals a short note on tap. Used to get long explanatory
+// paragraphs out of the inputs — the full reasoning lives on the Info page.
+function InfoTip({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="inline-flex items-center align-middle">
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          setOpen((v) => !v);
+        }}
+        className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ml-1"
+        style={{ background: "#4C8DFF1A", color: "#4C8DFF" }}
+        aria-label="More information"
+      >
+        i
+      </button>
+      {open && <span className="block text-[11px] text-stone-400 mt-1 leading-snug w-full">{text}</span>}
+    </span>
+  );
+}
+
+function RateInput({ value, defaultValue, onChange, suffix, accent = "#4C8DFF", defaultLabel = "Default", customLabel = "Enter my own" }) {
+  const isAtDefault = value === defaultValue;
+  const [mode, setMode] = useState(isAtDefault ? "default" : "custom");
+
+  // if the default itself moves (e.g. the region changed) and we're tracking it,
+  // follow it rather than silently freezing on the old number
+  useEffect(() => {
+    if (mode === "default" && value !== defaultValue) onChange(defaultValue);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultValue]);
+
+  return (
+    <>
+      <SelectInput
+        value={mode}
+        onChange={(m) => {
+          setMode(m);
+          if (m === "default") onChange(defaultValue);
+        }}
+        options={[
+          { value: "default", label: `${defaultLabel} (${round2(defaultValue)}${suffix ? " " + suffix : ""})` },
+          { value: "custom", label: customLabel },
+        ]}
+      />
+      {mode === "custom" && (
+        <div className="mt-2">
+          <NumberInput value={value} onChange={onChange} suffix={suffix} accent={accent} />
+        </div>
+      )}
+    </>
+  );
+}
+
 function NumberInput({ value, onChange, suffix, accent = "#4C8DFF" }) {
   const [draft, setDraft] = useState(String(value ?? 0));
 
@@ -3011,9 +3189,9 @@ const WIZARD_DEFAULTS = {
       name: "Primary home",
       usage: "primary",
       value: 300000,
-      hasMortgage: true,
-      mortgageBalance: 150000,
-      mortgagePayment: 1200,
+      hasMortgage: false,
+      mortgageBalance: 0,
+      mortgagePayment: 0,
       mortgageInputMode: "rate",
       mortgageRate: 4.5,
       rent: 0,
@@ -3112,9 +3290,9 @@ const DEFAULTS = {
       usage: "primary",
       sellable: false,
       postSaleAction: "rent",
-      purchasePrice: 300000,
-      mortgageBalance: 220000,
-      mortgagePayment: 1800,
+      purchasePrice: 400000,
+      mortgageBalance: 0,
+      mortgagePayment: 0,
       mortgageRateType: "fixed",
       mortgageInputMode: "rate",
       mortgageRate: 4.5,
@@ -3217,8 +3395,18 @@ export default function RetirementCalculator() {
   const [showNetWorthBreakdown, setShowNetWorthBreakdown] = useState(false);
   const [showMethodology, setShowMethodology] = useState(false);
   const [mortgageScheduleModalId, setMortgageScheduleModalId] = useState(null); // house id, or null when closed
-  const [showMath, setShowMath] = useState(false);
   const [infoRatesRegion, setInfoRatesRegion] = useState("EU"); // Info page: region/country tables
+  // which Info topics are expanded (all collapsed by default) and which section is open
+  const [openInfoTopics, setOpenInfoTopics] = useState({});
+  const [mathModalTopic, setMathModalTopic] = useState(null); // { id, title } or null
+  const [openInfoSections, setOpenInfoSections] = useState({});
+  // Deep link into the Info page from anywhere else in the app: opens the page, expands
+  // the right section, and expands that one topic. e.g. openInfoTopic("capital-gains")
+  const openInfoTopic = (topicId, sectionId) => {
+    setShowMethodology(true);
+    if (sectionId) setOpenInfoSections((p) => ({ ...p, [sectionId]: true }));
+    setOpenInfoTopics((p) => ({ ...p, [topicId]: true }));
+  };
   const [infoTaxCountry, setInfoTaxCountry] = useState("DE");
   const [expandedAdvanced, setExpandedAdvanced] = useState({}); // per house-card id: is the "Advanced" section open?
   // ITEM 17: input cards collapse to a one-line summary by default so a whole list fits
@@ -3389,6 +3577,59 @@ export default function RetirementCalculator() {
     wizardUpdateItem("housesList", item.id, merged);
   };
 
+  // Smallest-pot-first ordering, with the primary residence forced last. Used to seed the
+  // order at onboarding AND available as an explicit "re-sort" action afterwards, since
+  // balances move over time and a manually-reordered list should never be silently
+  // rewritten underneath the person.
+  const sortOrderBySize = (order, invList, retList) => {
+    const valueOf = (entry) => {
+      const { type, id } = parseOrderEntry(entry);
+      if (type === "investment") {
+        const inv = invList.find((i) => i.id === id);
+        return inv ? inv.amount || 0 : 0;
+      }
+      if (type === "house") {
+        const h = invList.find((i) => i.id === id);
+        // rank a property on the equity it would actually release, not its headline value
+        return h ? Math.max(0, (h.amount || 0) - (h.mortgageBalance || 0)) : 0;
+      }
+      if (type === "retirement") {
+        const r = retList.find((x) => x.id === id);
+        return r ? r.amount || 0 : 0;
+      }
+      return 0;
+    };
+    const isPrimaryHome = (entry) => {
+      const { type, id } = parseOrderEntry(entry);
+      if (type !== "house") return false;
+      const h = invList.find((i) => i.id === id);
+      return !!h && h.usage !== "rental";
+    };
+    // A retirement pot that can't legally be touched until minAge isn't a usable
+    // fallback today, however small it is — so it ranks behind everything accessible.
+    const isLockedRetirement = (entry) => {
+      const { type, id } = parseOrderEntry(entry);
+      if (type !== "retirement") return false;
+      const r = retList.find((x) => x.id === id);
+      if (!r) return false;
+      if (r.earlyAccessAllowed) return false; // reachable, just with a penalty
+      return (r.minAge || 0) > profile.currentAge;
+    };
+    // rank: accessible assets (0) -> locked retirement (1) -> primary home (2)
+    const tier = (entry) => (isPrimaryHome(entry) ? 2 : isLockedRetirement(entry) ? 1 : 0);
+    return [
+      "cash",
+      ...order
+        .filter((e) => e !== "cash")
+        .sort((x, y) => {
+          const tx = tier(x), ty = tier(y);
+          if (tx !== ty) return tx - ty;
+          return valueOf(x) - valueOf(y); // then smallest first within a tier
+        }),
+    ];
+  };
+  const resortWithdrawalOrder = () => setWithdrawalOrder((prev) => sortOrderBySize(prev, investments, retirement));
+
   const finishOnboarding = (a) => {
     const region = a.region || "EU";
     const rd = REGION_DEFAULTS[region] || REGION_DEFAULTS.EU;
@@ -3515,7 +3756,7 @@ export default function RetirementCalculator() {
           postSaleAction: sellable ? item.postSaleAction || "none" : "none",
           rebuyValue: item.rebuyValue || 0,
           resizeFactor: item.resizeFactor ?? 0.5,
-          postSaleRent: item.postSaleRent || 0,
+          postSaleRent: item.postSaleRent ?? Math.round((a.monthlyExpenses || 0) * 0.35),
           sellingFeePercent: item.sellingFeePercent ?? 4,
           // default the cost basis to the CURRENT value (i.e. no built-in gain) rather
           // than inventing one. The old `value * 0.7` silently baked in a 30% capital
@@ -3560,47 +3801,7 @@ export default function RetirementCalculator() {
       percentOfSalary: a.pensionPercent,
       indexed: a.pensionIndexed !== false,
     });
-    // Order the fallbacks smallest-first: drawing down a small pot fully before touching
-    // a large one avoids nibbling every account at once, and leaves the biggest
-    // (usually longest-compounding) assets invested for longer. The primary residence is
-    // forced last — it's where you live, so it should be the final resort no matter its
-    // value. "cash" always stays at the front as the liquid buffer.
-    const valueOfOrderEntry = (entry) => {
-      const { type, id } = parseOrderEntry(entry);
-      if (type === "investment") {
-        const inv = newInvestments.find((i) => i.id === id);
-        return inv ? inv.amount || 0 : 0;
-      }
-      if (type === "house") {
-        const h = newInvestments.find((i) => i.id === id);
-        if (!h) return 0;
-        // rank a property on the equity it would actually release, not its headline value
-        return Math.max(0, (h.amount || 0) - (h.mortgageBalance || 0));
-      }
-      if (type === "retirement") {
-        const r = newRetirement.find((x) => x.id === id);
-        return r ? r.amount || 0 : 0;
-      }
-      return 0;
-    };
-    const isPrimaryHomeEntry = (entry) => {
-      const { type, id } = parseOrderEntry(entry);
-      if (type !== "house") return false;
-      const h = newInvestments.find((i) => i.id === id);
-      return !!h && h.usage !== "rental";
-    };
-    const sortedOrder = [
-      "cash",
-      ...newOrder
-        .filter((e) => e !== "cash")
-        .sort((x, y) => {
-          const xPrimary = isPrimaryHomeEntry(x) ? 1 : 0;
-          const yPrimary = isPrimaryHomeEntry(y) ? 1 : 0;
-          if (xPrimary !== yPrimary) return xPrimary - yPrimary; // primary home always last
-          return valueOfOrderEntry(x) - valueOfOrderEntry(y); // then smallest first
-        }),
-    ];
-    setWithdrawalOrder(sortedOrder);
+    setWithdrawalOrder(sortOrderBySize(newOrder, newInvestments, newRetirement));
     setLumpSums([]);
 
     setShowOnboarding(false);
@@ -3668,6 +3869,17 @@ export default function RetirementCalculator() {
     return { ...work, salary: convertCurrency(work.salary, c, currency, fxRates) };
   }, [work, currency, fxRates]);
 
+  // lump sums can be denominated in any currency, same as every other money bucket
+  const convertedLumpSums = useMemo(
+    () =>
+      lumpSums.map((ls) => {
+        const c = ls.currency || currency;
+        if (c === currency) return ls;
+        return { ...ls, amount: convertCurrency(ls.amount, c, currency, fxRates) };
+      }),
+    [lumpSums, currency, fxRates]
+  );
+
   const effectiveSavingsRule = useMemo(() => {
     const validTarget = convertedInvestments.find((i) => i.id === savingsRule.targetInvestmentId && i.type !== "house");
     if (validTarget) return savingsRule;
@@ -3686,10 +3898,10 @@ export default function RetirementCalculator() {
         retirement: convertedRetirement,
         withdrawalOrder,
         pension,
-        lumpSums,
+        lumpSums: convertedLumpSums,
         savingsRule: effectiveSavingsRule,
       }),
-    [profile, convertedWork, expensesState, convertedCash, convertedInvestments, convertedRetirement, withdrawalOrder, pension, lumpSums, effectiveSavingsRule]
+    [profile, convertedWork, expensesState, convertedCash, convertedInvestments, convertedRetirement, withdrawalOrder, pension, convertedLumpSums, effectiveSavingsRule]
   );
 
   const { fiAge } = useMemo(
@@ -3703,10 +3915,10 @@ export default function RetirementCalculator() {
         retirement: convertedRetirement,
         withdrawalOrder,
         pension,
-        lumpSums,
+        lumpSums: convertedLumpSums,
         savingsRule: effectiveSavingsRule,
       }),
-    [profile, convertedWork, expensesState, convertedCash, convertedInvestments, convertedRetirement, withdrawalOrder, pension, lumpSums, effectiveSavingsRule]
+    [profile, convertedWork, expensesState, convertedCash, convertedInvestments, convertedRetirement, withdrawalOrder, pension, convertedLumpSums, effectiveSavingsRule]
   );
 
   const yearsToFI = fiAge != null ? fiAge - profile.currentAge : null;
@@ -3749,7 +3961,7 @@ export default function RetirementCalculator() {
       retirement: convertedRetirement,
       withdrawalOrder,
       pension,
-      lumpSums,
+      lumpSums: convertedLumpSums,
       savingsRule: effectiveSavingsRule,
     };
     const deltaDaysFor = (variantBundle) => {
@@ -3803,7 +4015,7 @@ export default function RetirementCalculator() {
       retirement: convertedRetirement,
       withdrawalOrder,
       pension,
-      lumpSums,
+      lumpSums: convertedLumpSums,
       savingsRule: effectiveSavingsRule,
     };
     whatIfChanges.forEach((change) => {
@@ -4022,8 +4234,17 @@ export default function RetirementCalculator() {
       }));
       // drilling into Properties shows each property's VALUE — the mortgages owed
       // against them belong in the same picture, as a band below zero
-      if (chartDrilldown === "_grpProperties" && hasMortgageDebt) {
-        return [...members, { key: "Debt", name: tt("Debt (mortgage)"), color: "#FF6B5B" }];
+      if (chartDrilldown === "_grpProperties") {
+        // shades of red so several mortgages stay distinguishable from each other
+        const DEBT_COLORS = ["#FF6B5B", "#E8503F", "#FF9A8C", "#C93B2B"];
+        const debtBands = drilldownMembers._grpProperties
+          .filter((name) => years.some((y) => (y[`__debt__${name}`] || 0) < 0))
+          .map((name, idx) => ({
+            key: `__debt__${name}`,
+            name: `${name} — ${tt("Mortgage")}`,
+            color: DEBT_COLORS[idx % DEBT_COLORS.length],
+          }));
+        return [...members, ...debtBands];
       }
       return members;
     }
@@ -4138,6 +4359,8 @@ export default function RetirementCalculator() {
   const invColor = (id) => PALETTE[(investments.findIndex((i) => i.id === id) + 1) % PALETTE.length];
   const retColor = (id) => PALETTE[(1 + investments.length + retirement.findIndex((r) => r.id === id)) % PALETTE.length];
 
+
+
   const orderKeyFor = (inv) => (inv.type === "house" ? `house:${inv.id}` : `investment:${inv.id}`);
   const isOrderable = (inv) => inv.type !== "house" || inv.sellable !== false;
 
@@ -4160,7 +4383,9 @@ export default function RetirementCalculator() {
       const present = new Set(cleaned);
       const missing = [...validKeys].filter((k) => !present.has(k));
       if (cleaned.length === prev.length && missing.length === 0) return prev; // no change
-      return [...cleaned, ...missing];
+      // a newly-added account slots in by size rather than always landing last, so the
+      // list stays consistent with the smallest-first rule the order was built on
+      return sortOrderBySize([...cleaned, ...missing], investments, retirement);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [investments, retirement, loaded, showOnboarding]);
@@ -4352,18 +4577,6 @@ export default function RetirementCalculator() {
         {fontLink}
         <div className="px-6 pt-8">
           <div className="flex items-center gap-3 mb-3">
-            {wizardStepIndex > 0 ? (
-              <button
-                onClick={goBack}
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                style={{ background: "#EEE9F7", color: "#4C8DFF" }}
-                aria-label={tr("wizard_back", "Back")}
-              >
-                <ChevronLeft size={20} />
-              </button>
-            ) : (
-              <div className="w-9 h-9 shrink-0" />
-            )}
             <div className="h-1.5 flex-1 rounded-full overflow-hidden" style={{ background: "#EEE9F7" }}>
               <div
                 className="h-full rounded-full transition-all duration-300"
@@ -4474,9 +4687,6 @@ export default function RetirementCalculator() {
                       </button>
                     )}
                   </div>
-                  <Field label={tt("Name")}>
-                    <TextInput value={item.name} onChange={(v) => wizardUpdateItem("investmentsList", item.id, { name: v })} />
-                  </Field>
                   <Field label={tt("Type")}>
                     <SelectInput
                       value={item.type || "market"}
@@ -4582,7 +4792,7 @@ export default function RetirementCalculator() {
                 onClick={() => {
                   const rd = REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU;
                   wizardAddItem("investmentsList", {
-                    name: "Investment",
+                    name: `Investment ${(wizardAnswers.investmentsList || []).length + 1}`,
                     type: "market",
                     amount: 10000,
                     contribution: 200,
@@ -4618,13 +4828,22 @@ export default function RetirementCalculator() {
                         </button>
                       )}
                     </div>
-                    <Field label={tt("Name")}>
-                      <TextInput value={item.name} onChange={(v) => wizardUpdateItem("housesList", item.id, { name: v })} />
-                    </Field>
                     <Field label={tt("This is my")}>
                       <SelectInput
                         value={item.usage || "primary"}
-                        onChange={(v) => wizardUpdateItem("housesList", item.id, { usage: v })}
+                        onChange={(v) =>
+                          wizardUpdateItem("housesList", item.id, {
+                            usage: v,
+                            // keep the auto-generated name in step with the usage, unless
+                            // it has been renamed to something bespoke already
+                            name:
+                              !item.name || item.name === "Primary home" || item.name === "Rental property"
+                                ? v === "rental"
+                                  ? "Rental property"
+                                  : "Primary home"
+                                : item.name,
+                          })
+                        }
                         options={[
                           { value: "primary", label: tt("Primary home") },
                           { value: "rental", label: tt("Rental property") },
@@ -4645,7 +4864,21 @@ export default function RetirementCalculator() {
                       <SelectInput
                         value={item.hasMortgage ? "yes" : "no"}
                         onChange={(v) =>
-                          wizardUpdateItem("housesList", item.id, v === "yes" ? { hasMortgage: true } : { hasMortgage: false, mortgageBalance: 0, mortgagePayment: 0 })
+                          wizardUpdateItem(
+                            "housesList",
+                            item.id,
+                            v === "yes"
+                              ? {
+                                  hasMortgage: true,
+                                  // seed something plausible off the property value rather than
+                                  // leaving every field at 0 with nothing to derive a term from
+                                  mortgageBalance: item.mortgageBalance || Math.round((item.value || 0) * 0.4),
+                                  mortgagePayment:
+                                    item.mortgagePayment ||
+                                    Math.round(computeMortgagePayment(Math.round((item.value || 0) * 0.4), item.mortgageRate ?? 4.5, 20)),
+                                }
+                              : { hasMortgage: false, mortgageBalance: 0, mortgagePayment: 0 }
+                          )
                         }
                         options={[
                           { value: "no", label: "No — owned outright" },
@@ -4824,7 +5057,7 @@ export default function RetirementCalculator() {
                             <Field label={tt("Monthly rent after selling")}>
                               <NumberInput
                                 accent="#4C8DFF"
-                                value={item.postSaleRent || 0}
+                                value={item.postSaleRent ?? Math.round((wizardAnswers.monthlyExpenses || 0) * 0.35)}
                                 onChange={(v) => wizardUpdateItem("housesList", item.id, { postSaleRent: v })}
                               />
                             </Field>
@@ -4844,7 +5077,7 @@ export default function RetirementCalculator() {
                 onClick={() => {
                   const rd = REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU;
                   wizardAddItem("housesList", {
-                    name: "Rental property",
+                    name: `Rental property ${((wizardAnswers.housesList || []).filter((h) => h.usage === "rental").length + 1)}`,
                     usage: "rental",
                     value: 250000,
                     hasMortgage: false,
@@ -4888,9 +5121,6 @@ export default function RetirementCalculator() {
                       </button>
                     )}
                   </div>
-                  <Field label={tt("Name")}>
-                    <TextInput value={item.name} onChange={(v) => wizardUpdateItem("retirementList", item.id, { name: v })} />
-                  </Field>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label={tt("Balance today")}>
                       <NumberInput accent="#4C8DFF" value={item.balance} onChange={(v) => wizardUpdateItem("retirementList", item.id, { balance: v })} />
@@ -4965,7 +5195,7 @@ export default function RetirementCalculator() {
               <button
                 onClick={() =>
                   wizardAddItem("retirementList", {
-                    name: "Retirement account",
+                    name: `Retirement account ${(wizardAnswers.retirementList || []).length + 1}`,
                     balance: 10000,
                     contribution: 0,
                     growthRate: 6,
@@ -5089,11 +5319,7 @@ export default function RetirementCalculator() {
               {(wizardAnswers.cashList || []).map((item) => (
                 <div key={item.id} className="rounded-2xl bg-white p-3.5 mb-3 shadow-sm border border-stone-100">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="flex-1 mr-2">
-                      <Field label={tt("Name")}>
-                        <TextInput value={item.name} onChange={(v) => wizardUpdateItem("cashList", item.id, { name: v })} />
-                      </Field>
-                    </div>
+                    <div className="flex-1 mr-2 text-sm font-semibold text-stone-700">{item.name}</div>
                     {(wizardAnswers.cashList || []).length > 1 && (
                       <button onClick={() => wizardRemoveItem("cashList", item.id)} className="text-stone-300 hover:text-rose-500 shrink-0">
                         <Trash2 size={14} />
@@ -5117,7 +5343,11 @@ export default function RetirementCalculator() {
               <button
                 onClick={() => {
                   const rd = REGION_DEFAULTS[wizardAnswers.region] || REGION_DEFAULTS.EU;
-                  wizardAddItem("cashList", { name: "Cash", amount: 0, currency: rd.currency });
+                  wizardAddItem("cashList", {
+                    name: `Cash ${(wizardAnswers.cashList || []).length + 1}`,
+                    amount: 0,
+                    currency: rd.currency,
+                  });
                 }}
                 className="w-full rounded-full py-2.5 text-sm font-semibold mb-4"
                 style={{ background: "#3DDC971A", color: "#1B7A4C" }}
@@ -5273,6 +5503,18 @@ export default function RetirementCalculator() {
             </>
           )}
         </div>
+
+        {wizardStepIndex > 0 && (
+          <div className="px-6 pb-6 pt-1">
+            <button
+              onClick={goBack}
+              className="flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-semibold"
+              style={{ background: "#EEE9F7", color: "#4C4370" }}
+            >
+              <ChevronLeft size={17} /> {tr("wizard_back_label", "Back")}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -5391,6 +5633,39 @@ export default function RetirementCalculator() {
           );
         })()}
 
+      {mathModalTopic && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center"
+          style={{ background: "rgba(20,16,40,0.45)" }}
+          onClick={() => setMathModalTopic(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-3xl bg-white px-5 pt-5 pb-8 max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <h3 className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                {mathModalTopic.title}
+              </h3>
+              <button onClick={() => setMathModalTopic(null)} className="text-stone-400 shrink-0">
+                <X size={18} />
+              </button>
+            </div>
+            {(MATH_BY_TOPIC[mathModalTopic.id] || []).map((f, i) => (
+              <div key={i} className="mb-4">
+                <div
+                  className="rounded-xl px-3.5 py-3 text-[13px] leading-relaxed"
+                  style={{ background: "#F6F4FC", color: "#2E2748", fontFamily: "'Space Grotesk', ui-monospace, monospace" }}
+                >
+                  {f.expr}
+                </div>
+                {f.note && <p className="text-[11px] text-stone-500 leading-relaxed mt-1.5">{f.note}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showMethodology && (
         <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
           <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 text-white" style={{ background: heroGradient }}>
@@ -5411,415 +5686,13 @@ export default function RetirementCalculator() {
               </span>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-stone-500 leading-relaxed">
-                {showMath
-                  ? "The actual formulas behind every number below."
-                  : "No finance degree needed — here's what's actually happening behind every number, in plain English."}
-              </p>
-              <button
-                onClick={() => setShowMath((v) => !v)}
-                className="shrink-0 text-xs font-semibold rounded-full px-3 py-1.5 border"
-                style={{ borderColor: SECTION_COLORS.profile, color: SECTION_COLORS.profile }}
-              >
-                {showMath ? "Plain English" : "I don't like plain English, give me the math"}
-              </button>
-            </div>
+            <p className="text-sm text-stone-500 leading-relaxed">
+              No finance degree needed — here's what's actually happening behind every number, in plain English.
+              Where a topic involves real maths, you'll find a "Show the maths" link inside it.
+            </p>
 
-            {(showMath
-              ? [
-                  {
-                    color: SECTION_COLORS.income,
-                    title: "The year-by-year simulation",
-                    math: `netCashFlow = netSalary + netPension + extraIncome + lumpSum − annualExpenses
-
-if netCashFlow ≥ 0:
-  surplus is routed to cash/investment (see "Where surplus goes")
-else:
-  shortfall = −netCashFlow
-  drawn from each bucket in withdrawalOrder, in the exact
-  sequence you set, until shortfall = 0 or nothing is left`,
-                  },
-                  {
-                    color: SECTION_COLORS.investments,
-                    title: "Growth, every single year",
-                    math: `balance(t+1) = balance(t) × (1 + rate/100) + contribution
-
-Applied once per year, before that year's withdrawals.
-
-STATE PENSION — pro-rata for stopping early
-yearsContributed = (currentAge − careerStartAge) + yearsStillWorking
-yearsForFull     = fullPensionAge − careerStartAge      (default 65 − 25 = 40)
-proRata          = min(1, yearsContributed / yearsForFull)
-pension          = %ofFinalSalary × finalSalary × proRata
-
-Defaults assume a career starting at 25 and a full pension
-requiring contributions to 65. Both are editable. This is a
-simplification — the UK needs 35 qualifying years, France 43,
-and US Social Security averages your top 35 earning years.
-
-CD / TERM DEPOSIT (a "fixed rate" investment)
-Interest is taxed the year it's earned, like cash — not
-deferred and taxed as a capital gain on sale:
-  netInterest = balance × cdRateThisYear/100 × (1 − taxRateThisYear/100)
-Its cost basis is kept equal to its balance, so selling it
-triggers no further tax.
-
-THE RATE ITSELF CHANGES OVER TIME — it doesn't stay at
-today's rate forever. For the years still inside your lock-in
-(tenor), you earn the rate you entered. Once the tenor ends,
-the rate glides LINEARLY over 5 years to a "long-run" rate,
-then stays flat:
-
-  if yearsSinceStart < tenor:
-    rate = yourRate                       // still locked in
-  else:
-    t = min(1, (yearsSinceStart − tenor + 1) / 5)
-    rate = yourRate + (longRunRate − yourRate) × t
-
-Why: CD/term deposit rates are set by central banks reacting
-to inflation, not a stable long-run mean — so unlike equities,
-a historical percentile of past rates isn't a coherent
-long-run assumption (2010–2021's near-0% rates only happened
-because inflation was persistently low; assuming that forever
-alongside 2.5% inflation would be inconsistent). Instead the
-long-run rate is anchored to inflation: roughly
-  longRunRate ≈ inflation − 0.5 points
-which matches the historical real return on 1-year CDs. Both
-the tenor and the long-run rate are editable per account.
-
-DEFAULT GROWTH RATE — how it's derived
-Historical long-run index returns (total return, dividends
-reinvested), then haircut for caution:
-
-  region        historical   default
-  US   S&P 500     10.0%      7.0%
-  EU   Stoxx 50     7.0%      4.0%
-  UK   FTSE 100     6.5%      3.5%
-  CA   S&P/TSX      8.0%      5.0%
-
-The default ≈ the 25th-percentile outcome over a 10-year
-holding period, i.e. "a somewhat disappointing decade":
-
-  annual σ of equity returns  ≈ 17%
-  σ over a 10-yr horizon      = 17 / √10 ≈ 5.5%
-  25th percentile             z = −0.674
-  haircut                     = 0.674 × 5.5 ≈ 3.0 points
-
-So the default is roughly (historical − 3). It is NOT a
-forecast — it's a deliberately cautious planning number.
-Every rate is editable.
-
-BOND / FIXED-INCOME DEFAULT — same idea, smaller haircut
-One blended government + investment-grade corporate bond
-index per region, same "cautious decade" methodology as
-equities above, but haircut LESS (~1–1.5 points instead of
-~3) since bonds are meaningfully less volatile:
-
-  region   historical bond avg   default
-  US       5.0%                  3.5%
-  EU       4.0%                  2.5%
-  UK       5.0%                  3.5%
-  CA       5.5%                  4.0%
-
-High-yield corporate bonds sit somewhere between this and
-equities in risk/return and aren't modeled as their own
-index — pick a rate between the two defaults, or your own
-number, if that's what you hold. Bonds get their own
-What-If lever, separate from equities.`,
-                  },
-                  {
-                    color: SECTION_COLORS.retirement,
-                    title: "Average tax rate — worked out automatically ('Auto' mode)",
-                    math: `Rather than one flat guessed number, each simulated year's
-tax rate is looked up from a progressive bracket table for
-your COUNTRY (finer-grained than the app's broader "region" —
-region drives currency/inflation/market defaults, tax needs
-more precision than that), applied to that YEAR's actual gross
-ordinary income:
-
-grossOrdinaryIncome = grossSalary + grossPension
-                    + grossRent + cashInterestGross
-                    + cdInterestGross
-                    (dividends excluded — taxed separately, below)
-
-taxRateThisYear = effectiveRate(grossOrdinaryIncome, bracketsFor(taxCountry))
-
-effectiveRate(income, brackets):
-  tax = 0; lower = 0
-  for each {upTo, rate} in brackets (ascending):
-    taxable = min(income, upTo) − lower
-    tax += taxable × rate/100
-    lower = upTo
-  return tax / income × 100
-
-This means the rate isn't fixed for the whole plan — it's
-naturally much lower once retired and living off modest
-withdrawals than while earning full salary, without you having
-to remember to change it.
-
-Dividend income gets its OWN rate, dividendRateThisYear, looked
-up the same way from a separate table — several countries tax
-dividends noticeably differently from ordinary income (a flat
-"flat tax"-style rate, or a separate lower band).
-
-SUPPORTED COUNTRIES (real bracket tables, updates with income):
-  France, Germany, Italy, Spain — pick one on the Profile tab
-    when your region is set to EU
-  UK
-  US — New York (State + NYC) specifically, or a generic
-    federal-plus-representative-state estimate for any other state
-  Canada — Federal + Ontario-representative province
-
-Picking "another EU country" doesn't guess a nearby country's
-brackets — there's no real table for it, so the rate is instead
-FIXED at a one-time estimate (the average of the four supported
-EU countries at your income) and won't move as your income
-changes across the years the way it does for a supported
-country. A small warning banner on the Profile tab flags this.
-
-Assumptions baked into every table: SINGLE filer, no dependents,
-no itemized deductions beyond the standard/personal allowance.
-Deliberately erring slightly high where a judgment call is
-needed, consistent with the rest of the app. Figures are for the
-2025 tax year (UK: 2025/26) — revisit every year or two, same as
-the inflation/market/CD tables.
-
-Either rate can be pinned to a fixed "manual" number instead —
-switch on the Profile tab. Manual mode uses that one number for
-every year, exactly like the app worked before this existed.`,
-                  },
-                  {
-                    color: SECTION_COLORS.retirement,
-                    title: "Capital gains — its own rate, by country",
-                    math: `Selling an appreciated investment or house used to be
-taxed at the ordinary rate too — that's been split out into
-its own capitalGainsRateThisYear, since most countries treat
-gains quite differently from salary/pension income:
-
-capitalGainsRateThisYear = computeCapitalGainsTaxRate(taxCountry, grossOrdinaryIncome)
-
-Per-country treatment:
-  France, Germany, Italy, Spain, both US options:
-    "sameAsDividend" — capital gains are taxed identically
-    (or near enough) to dividends in these countries, so this
-    just reuses the dividend rate already computed above.
-
-  UK:
-    "bands" — Capital Gains Tax is its OWN schedule, separate
-    from both income tax and dividend tax:
-      18% if ordinary income ≤ £50,270 (basic rate)
-      24% above that (higher rate)
-    (as of the Oct 2024 budget — shares and residential
-    property now share the same two rates)
-
-  Canada:
-    "inclusion" — NOT a separate rate at all. Only half the
-    gain is taxable income, taxed at the ordinary rate:
-      capitalGainsRate = ordinaryRate(taxCountry, income) × 0.5
-    (the proposed hike to a 66.67% inclusion rate was
-    cancelled in March 2025 — 50% inclusion stays in force)
-
-Same manual-override toggle as the other two rates, and the
-same "another EU country" fallback: a fixed one-time estimate
-rather than a real per-year table.`,
-                  },
-                  {
-                    color: SECTION_COLORS.retirement,
-                    title: "Taxes on withdrawals",
-                    math: `net = gross × (1 − taxRateThisYear/100)
-
-For a "taxed when withdrawn" account covering shortfall S:
-totalRate  = min(taxRate + earlyPenaltyRate, 0.95)
-grossTaken = S / (1 − totalRate)
-netToYou   = grossTaken × (1 − totalRate)   // always equals S
-
-Rent income is taxed the same way before being netted against
-expenses:
-netRent = grossRent × (1 − taxRateThisYear/100)
-
-Dividend income uses its OWN rate instead (see above):
-netDividend = grossDividend × (1 − dividendRateThisYear/100)
-
-Cash interest is taxed annually too:
-netInterest  = (balance × cashRate/100) × (1 − taxRateThisYear/100)
-cashBalance += netInterest
-
-Selling part of a market/dividend investment is taxed only
-on the gain above its cost basis (contributions raise the
-basis; growth does not) — at the CAPITAL GAINS rate, not the
-ordinary one:
-gainFraction = max(0, (value − costBasis) / value)
-taxRate      = min(gainFraction × capitalGainsRateThisYear/100, 0.95)
-grossSold    = shortfall / (1 − taxRate)
-netToYou     = grossSold × (1 − taxRate)`,
-                  },
-                  {
-                    color: SECTION_COLORS.lumpsums,
-                    title: "Mortgages — locked amortization schedule",
-                    math: `A mortgage's schedule is built ONCE, at the start of the
-simulation, from balance/payment/rate as they stand right then
-— using proper MONTHLY compounding (i = monthly rate):
-
-interest(month)   = balance × i
-principal(month)  = payment − interest(month)   // capped so the
-                                                  // final month can't overshoot
-balance(month+1)  = max(0, balance(month) − principal(month))
-
-Monthly rows are summed into 12-month blocks to give each
-simulated year's {startBalance, interestPaid, principalPaid,
-endBalance}. The simulation then just READS that row for the
-year, every year — it never re-derives the balance from
-balance/rate/payment live. This is deliberate: an earlier
-version DID re-derive it live, using ANNUAL compounding, which
-doesn't exactly match the monthly-compounding formula used to
-solve for the missing rate/years value — so a mortgage that was
-mathematically consistent at setup could still finish early or
-never quite amortize. Locking the schedule once removes that
-mismatch entirely; the loan now provably reaches zero at the
-exact month implied by its own numbers.
-
-"Floating" rate mortgages are locked the same way, at today's
-Cash-tab interest rate — this app doesn't actually change that
-rate over time yet, so there's currently no difference between
-"fixed" and "floating" in the simulation.
-
-If payment ≤ interest at that rate, no finite schedule exists
-(negative amortization) — that case falls back to the original
-live year-by-year math, and is flagged by a warning on the
-house card.
-
-A year where the whole plan runs short of money freezes that
-year's mortgage progress rather than skipping ahead in the
-schedule — so a temporary shortfall delays payoff by exactly as
-many years as it froze, rather than desyncing the schedule.
-
-Solve years from rate (i = monthly rate, n = months), used once
-to lock the schedule when balance/payment/rate are known:
-n = −ln(1 − i·P/M) / ln(1 + i)
-
-Solve rate from years — bisection search on:
-P·i / (1 − (1+i)^−n) = M`,
-                  },
-                  {
-                    color: "#0EA5E9",
-                    title: "Selling a house (always 100%, never partial)",
-                    math: `equity = value − mortgageBalance
-capitalGain  = max(0, value − purchasePrice)
-exemptGain   = primaryResidenceExemption(taxCountry, capitalGain, ...)
-taxableGain  = max(0, capitalGain − exemptGain)
-taxRate      = min(taxableGain / max(value, 1) × capitalGainsRateThisYear/100, 0.95)
-sellingFee   = value × feePercent/100
-netProceeds  = equity − taxableGain×capitalGainsRateThisYear/100 − sellingFee
-
-Leftover proceeds after covering that year's shortfall are
-routed through the same cash/investment split as any surplus.
-
-PRIMARY-RESIDENCE EXEMPTION — only applies when a property's
-usage is "primary", never a rental. No holding-period or
-occupancy-period requirement is modeled (the app only stores a
-purchase PRICE, not a purchase date), so this is the simple,
-unconditional version of each country's rule:
-  France, Germany, Italy, UK, Canada:
-    FULL exemption — the entire gain is tax-free
-  US:
-    ALLOWANCE — $250,000 of gain is exempt (single-filer
-    IRC §121 exclusion), anything above that taxed normally
-  Spain:
-    REINVESTMENT — exempt ONLY if the full sale proceeds go
-    into a new primary home: postSaleAction === "rebuy" AND
-    rebuyValue ≥ saleValue. Otherwise taxed like any other
-    capital gain. Maps directly onto the existing "buy a new
-    home" post-sale option — set the re-buy value to at least
-    the sale price to qualify.
-  Unsupported country: no exemption — taxed as an ordinary
-    capital gain, same as an investment.
-A rental never gets any of this — its gain is always fully
-taxable at capitalGainsRateThisYear.`,
-                  },
-                  {
-                    color: SECTION_COLORS.cash,
-                    title: '"Financial Independence" date',
-                    math: `for candidateAge in [currentAge .. lifeExpectancy]:
-  simulate with yearsWorking = candidateAge − currentAge
-  if simulation never runs out of money: candidateAge is sustainable
-
-FI age = earliest sustainable candidateAge, then refined with
-16 rounds of binary search over the fractional final working
-year, for day-level precision.`,
-                  },
-                  {
-                    color: SECTION_COLORS.profile,
-                    title: "Where surplus (or a windfall) goes",
-                    math: `if cashBalance < minCash:      100% → cash
-if cashBalance ≥ maxCash:      100% → investment
-else:                          cashPercent% → cash, rest → investment
-                               (capped so cash never exceeds maxCash)
-
-The minimum is a protected floor — withdrawals never draw cash
-below it: available = max(0, cashBalance − minCash)`,
-                  },
-                  {
-                    color: "#F2545B",
-                    title: "Spending decline with age (optional)",
-                    math: `Off by default. Approximates Blanchett (2014, "Exploring
-the Retirement Consumption Puzzle") using BLS Consumer
-Expenditure Survey data on actual retiree spending.
-
-yearsIn = max(0, age − retirementStartAge)
-retirementStartAge = currentAge + yearsStillWorking
-
-if yearsIn ≤ 10:  mult = 0.99 ^ yearsIn
-if yearsIn > 10:   mult = 0.99^10 × 0.98 ^ min(yearsIn−10, 9)
-   (flat after ~19 years in — no further decline)
-
-livingExpenses(year) = monthlyExpenses × 12 × mult
-
-Applies to living expenses only — mortgage/rent are tracked
-and inflated separately and are NOT reduced by this.
-
-Blanchett's data shows real spending falls ~26% by ~19 years
-into retirement (his study anchors this near age 84 for a
-65-year-old retiree), then — on AVERAGE — ticks back up from
-rising healthcare costs, forming a "smile." We deliberately
-stop at the flat trough rather than modeling that uptick: the
-uptick is driven by a subset with major late-life healthcare
-costs: the MEDIAN individual retiree's spending just stays
-down (a "smirk," not a "smile"), which is the more honest
-default for one person's plan.`,
-                  },
-                  {
-                    color: "#B98CFF",
-                    title: "Currency conversion",
-                    math: `amountIn(toCcy) = amount × rate[fromCcy] / rate[toCcy]
-
-where rate[X] = value of 1 unit of X in USD
-(live from a daily FX API, or an offline fallback table)`,
-                  },
-                  {
-                    color: "#4C8DFF",
-                    title: `"Today's money" toggle (Results chart)`,
-                    math: `The simulation itself always runs in NOMINAL terms — actual
-future dollars, inflated year by year, exactly like a real
-account statement would show. The "Today's $" toggle on the
-Results chart doesn't change that simulation; it only DEFLATES
-what's displayed, for that one view:
-
-realFactor(age) = 1 / (1 + inflation/100) ^ (age − currentAge)
-displayedValue  = nominalValue × realFactor(age)
-
-Applied to every dollar-shaped field in each year's chart row
-(every bucket, Debt, the net-worth total) using the single
-inflation assumption from the Income & Expenses tab. Non-dollar
-fields (age, flags, the itemized "what changed" explain/
-shortfall detail) are left untouched — they describe specific
-transactions that happened at their own year's nominal amount,
-so deflating them individually would misrepresent what actually
-happened that year, even though the running BALANCE above them
-is shown in today's terms.`,
-                  },
-                ]
-              : [
+            {(
+              [
                   {
                     color: SECTION_COLORS.income,
                     title: "The year-by-year simulation",
@@ -5886,35 +5759,79 @@ is shown in today's terms.`,
                     body: "Every dollar the simulation produces for a future year is a FUTURE dollar — inflated the same way real prices are, year after year. That's mathematically correct, but it's genuinely misleading to just look at: a number like €2,000,000 at age 90 sounds like a huge amount of money, but after 55 years of, say, 2.5% inflation, it might only be able to buy what roughly €500,000–€700,000 buys today. The toggle above the Results chart switches between the two honestly: \"Future $\" shows the literal number your accounts would show that year; \"Today's $\" strips inflation back out, so every year's balance is shown in the same purchasing power as right now — directly comparable to what things cost today. Neither view changes your actual plan or the underlying math; it only changes how the same result is displayed. \"Today's $\" is usually the more useful one for judging whether you're really getting ahead, since a big-sounding number 40 years out can still mean less real buying power than a smaller one 5 years out. The detailed, itemized breakdown you get from tapping a point on the chart stays in that year's own actual (future-dollar) amounts either way, since those describe specific things that happened that year — only the running balances above them switch.",
                   },
                 ]
-            ).map((s) => (
-              <div key={s.title}>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: s.color }} />
-                  <h3 className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                    {s.title}
-                  </h3>
-                </div>
-                {showMath ? (
-                  <pre
-                    className="text-[11px] leading-relaxed rounded-xl p-3 overflow-x-auto"
-                    style={{ background: "#231D3B", color: "#E9E4F7", fontFamily: "monospace" }}
-                  >
-                    {s.math}
-                  </pre>
-                ) : (
-                  <p className="text-xs text-stone-500 leading-relaxed pl-4.5">{s.body}</p>
-                )}
-              </div>
-            ))}
+            ).reduce((acc, s) => {
+              // group the flat topic list into the sections declared in INFO_SECTIONS
+              const meta = infoTopicMeta(s.title);
+              const bucket = acc.find((g) => g.id === meta.section);
+              const entry = { ...s, topicId: meta.id };
+              if (bucket) bucket.items.push(entry);
+              else acc.push({ id: meta.section, items: [entry] });
+              return acc;
+            }, []).sort((a, b) => INFO_SECTIONS.findIndex((x) => x.id === a.id) - INFO_SECTIONS.findIndex((x) => x.id === b.id))
+              .map((group) => {
+                const sectionLabel = INFO_SECTIONS.find((x) => x.id === group.id)?.label || group.id;
+                const sectionOpen = !!openInfoSections[group.id];
+                return (
+                  <div key={group.id} className="rounded-2xl bg-white shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => setOpenInfoSections((p) => ({ ...p, [group.id]: !p[group.id] }))}
+                      className="w-full flex items-center justify-between px-4 py-3 text-left"
+                    >
+                      <span className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                        {sectionLabel}
+                      </span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] text-stone-400">{group.items.length}</span>
+                        {sectionOpen ? <ChevronUp size={15} color="#8A81A6" /> : <ChevronDown size={15} color="#8A81A6" />}
+                      </span>
+                    </button>
+                    {sectionOpen &&
+                      group.items.map((s) => {
+                        const topicOpen = !!openInfoTopics[s.topicId];
+                        return (
+                          <div key={s.topicId} className="border-t border-stone-100">
+                            <button
+                              onClick={() => setOpenInfoTopics((p) => ({ ...p, [s.topicId]: !p[s.topicId] }))}
+                              className="w-full flex items-center gap-2 px-4 py-2.5 text-left"
+                            >
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+                              <span className="text-xs font-medium text-stone-700 flex-1">{s.title}</span>
+                              {topicOpen ? <ChevronUp size={13} color="#B0A9C6" /> : <ChevronDown size={13} color="#B0A9C6" />}
+                            </button>
+                            {topicOpen && (
+                              <div className="px-4 pb-3">
+                                <p className="text-xs text-stone-500 leading-relaxed">{s.body}</p>
+                                {MATH_BY_TOPIC[s.topicId] && (
+                                  <button
+                                    onClick={() => setMathModalTopic({ id: s.topicId, title: s.title })}
+                                    className="mt-2 text-[11px] font-semibold"
+                                    style={{ color: SECTION_COLORS.profile }}
+                                  >
+                                    {tt("Show the maths")} →
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                );
+              })}
 
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "#3DDC97" }} />
-                <h3 className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  Regional rates & tax brackets — the actual tables
-                </h3>
-              </div>
-              <p className="text-xs text-stone-500 leading-relaxed pl-4.5 mb-2">
+            <div className="rounded-2xl bg-white shadow-sm overflow-hidden">
+              <button
+                onClick={() => setOpenInfoSections((p) => ({ ...p, reference: !p.reference }))}
+                className="w-full flex items-center justify-between px-4 py-3 text-left"
+              >
+                <span className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+                  {INFO_SECTIONS.find((x) => x.id === "reference")?.label}
+                </span>
+                {openInfoSections.reference ? <ChevronUp size={15} color="#8A81A6" /> : <ChevronDown size={15} color="#8A81A6" />}
+              </button>
+              {openInfoSections.reference && (
+              <div className="px-4 pb-4 border-t border-stone-100 pt-3">
+              <p className="text-xs text-stone-500 leading-relaxed mb-2">
                 Every default number in the app comes from one of these two tables. Pick a region to see its cash,
                 CD, equity, and bond defaults; for the EU and the US, pick a country or state too, to see its
                 income tax brackets.
@@ -6094,6 +6011,8 @@ is shown in today's terms.`,
                   );
                 })()}
               </div>
+              </div>
+              )}
             </div>
 
             <div className="rounded-2xl px-4 py-3.5 text-xs leading-relaxed" style={{ background: "#FFF1EC", color: "#B23A22" }}>
@@ -6259,13 +6178,6 @@ is shown in today's terms.`,
         </div>
 
         <div className="mt-5 flex gap-2 text-xs flex-wrap">
-          <button
-            onClick={() => setTab("inputs")}
-            className="flex items-center gap-1 rounded-full px-3 py-1.5 font-medium"
-            style={{ background: "rgba(255,255,255,0.14)", color: "white" }}
-          >
-            <User size={12} /> {tr("edit_profile")}
-          </button>
           <button
             onClick={resetProfile}
             className="flex items-center gap-1 rounded-full px-3 py-1.5 font-medium"
@@ -6493,7 +6405,25 @@ is shown in today's terms.`,
                     </div>
                   ) : null;
                 })()}
-                <Field label={tt("Average tax rate")}>
+                <Field
+                  label={
+                    <>
+                      {tt("Average tax rate")}
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          openInfoTopic("tax-rate", "tax");
+                        }}
+                        className="w-4 h-4 rounded-full inline-flex items-center justify-center text-[10px] font-bold ml-1 align-middle"
+                        style={{ background: "#4C8DFF1A", color: "#4C8DFF" }}
+                        aria-label={tt("Your average effective rate, not your top bracket. Full explanation on the Info page.")}
+                        title={tt("Your average effective rate, not your top bracket. Full explanation on the Info page.")}
+                      >
+                        i
+                      </button>
+                    </>
+                  }
+                >
                   <SelectInput
                     value={isTaxCountrySupported(resolveTaxCountry(profile)) ? profile.taxMode ?? "manual" : "manual"}
                     onChange={(v) => setProfile({ ...profile, taxMode: v })}
@@ -6517,32 +6447,36 @@ is shown in today's terms.`,
                     />
                   </Field>
                 ) : (
-                  <Field label={tt("Current estimate, at today's salary")}>
-                    {(() => {
-                      const tc = resolveTaxCountry(profile);
-                      const sc = computeSalaryAddOnRate(tc, work.salary);
-                      const { afterSocial, taxable } = taxableSalaryPortion(tc, work.salary);
-                      const itRate = computeOrdinaryTaxRate(tc, taxable);
-                      const net = afterSocial * (1 - itRate / 100);
-                      const totalPct = work.salary > 0 ? 100 - (100 * net) / work.salary : 0;
-                      return (
+                  (() => {
+                    const tc = resolveTaxCountry(profile);
+                    const sc = computeSalaryAddOnRate(tc, work.salary);
+                    const { afterSocial, taxable } = taxableSalaryPortion(tc, work.salary);
+                    const itRate = computeOrdinaryTaxRate(tc, taxable);
+                    const net = afterSocial * (1 - itRate / 100);
+                    const totalPct = work.salary > 0 ? 100 - (100 * net) / work.salary : 0;
+                    return (
+                      <Field
+                        label={
+                          <>
+                            {tt("Estimate")}
+                            <InfoTip
+                              text={
+                                sc > 0
+                                  ? `${round2(sc)}% ${tt("social charges")}, ${tt("then")} ~${Math.round(itRate)}% ${tt("income tax on what's left")}.`
+                                  : `~${Math.round(itRate)}% ${tt("income tax")}.`
+                              }
+                            />
+                          </>
+                        }
+                      >
                         <div className="rounded-xl bg-white px-4 py-3 shadow-sm">
                           <div className="text-sm font-semibold" style={{ color: SECTION_COLORS.profile }}>
-                            ~{Math.round(totalPct)}% {tt("of your salary, in total")}
-                          </div>
-                          <div className="text-[11px] text-stone-400 mt-1 leading-snug">
-                            {sc > 0 && (
-                              <>
-                                {round2(sc)}% {tt("social charges")}, {tt("then")} ~{Math.round(itRate)}% {tt("income tax on what's left")}.
-                                <br />
-                              </>
-                            )}
-                            {tt("Social charges apply to salary only — not to a pension, rent, or interest.")}
+                            ~{Math.round(totalPct)}%
                           </div>
                         </div>
-                      );
-                    })()}
-                  </Field>
+                      </Field>
+                    );
+                  })()
                 )}
                 {(profile.taxMode ?? "manual") === "auto" && isTaxCountrySupported(resolveTaxCountry(profile)) && (
                   <div className="col-span-2">
@@ -6600,7 +6534,7 @@ is shown in today's terms.`,
                     />
                   </Field>
                 ) : (
-                  <Field label={tt("Current estimate, at today's salary")}>
+                  <Field label={tt("Estimate")}>
                     <div className="rounded-xl bg-white px-4 py-3 text-sm font-semibold shadow-sm" style={{ color: SECTION_COLORS.profile }}>
                       ~{Math.round(computeDividendTaxRate(resolveTaxCountry(profile), work.salary))}%
                     </div>
@@ -6630,26 +6564,13 @@ is shown in today's terms.`,
                     />
                   </Field>
                 ) : (
-                  <Field label={tt("Current estimate, at today's salary")}>
+                  <Field label={tt("Estimate")}>
                     <div className="rounded-xl bg-white px-4 py-3 text-sm font-semibold shadow-sm" style={{ color: SECTION_COLORS.profile }}>
                       ~{Math.round(computeCapitalGainsTaxRate(resolveTaxCountry(profile), work.salary))}%
                     </div>
                   </Field>
                 )}
               </div>
-            )}
-            {activeSection === "profile" && (
-              <p className="text-xs text-stone-400 mt-2">
-                "Average tax rate" is your <strong>average effective rate</strong> — the share of ordinary income
-                (salary, pension, rent, cash/CD interest) actually paid in tax overall, not your top marginal
-                bracket. In "Auto" mode it's recalculated every simulated year from your country's tax brackets and
-                that year's actual income (so it naturally drops once you're retired and living off smaller
-                withdrawals) — assuming a single filer with no dependents, slightly conservative where a judgment
-                call is needed. Dividends and capital gains (selling an investment or a house) are both taxed
-                differently from ordinary income in most countries, so they each get their own rate — see the Info
-                page for exactly how each country's capital gains rate is worked out, and what "primary residence"
-                sets get exempted. Switch any of the three to "Set my own number" any time to override.
-              </p>
             )}
             {activeSection === "profile" && profile.multiCurrency && (
               <div className="mt-4 rounded-xl bg-white p-3 shadow-sm flex items-center justify-between">
@@ -6669,13 +6590,6 @@ is shown in today's terms.`,
                   {tr("refresh_label", "Refresh")}
                 </button>
               </div>
-            )}
-            {activeSection === "profile" && (
-              <p className="text-xs text-stone-400 mt-3">
-                Every investment, retirement account, and your cash can each be set to a different currency (on
-                their own tabs) — everything gets converted to your base currency above for all totals and
-                calculations.
-              </p>
             )}
 
             {activeSection === "income" && (
@@ -6700,11 +6614,14 @@ is shown in today's terms.`,
                   />
                 </Field>
                 <Field label={tt("Salary growth")}>
-                  <NumberInput
+                  <RateInput
+                            defaultLabel={tt("Default")}
+                            customLabel={tt("Enter my own")}
                     accent={SECTION_COLORS.income}
                     value={work.salaryGrowth}
                     suffix="%/yr"
                     onChange={(v) => setWork({ ...work, salaryGrowth: v })}
+                    defaultValue={2}
                   />
                 </Field>
                 <Field label={tt("Monthly expenses (non including mortgages)")}>
@@ -6715,11 +6632,14 @@ is shown in today's terms.`,
                   />
                 </Field>
                 <Field label={tt("Inflation")}>
-                  <NumberInput
+                  <RateInput
+                            defaultLabel={tt("Default")}
+                            customLabel={tt("Enter my own")}
                     accent={SECTION_COLORS.income}
                     value={expensesState.inflation}
                     suffix="%/yr"
                     onChange={(v) => setExpensesState({ ...expensesState, inflation: v })}
+                    defaultValue={(REGION_DEFAULTS[profile.region] || REGION_DEFAULTS.EU).inflation}
                   />
                 </Field>
               </div>
@@ -6798,9 +6718,12 @@ is shown in today's terms.`,
                         </Field>
                       )}
                       <Field label={tt("Interest rate")}>
-                        <NumberInput
+                        <RateInput
+                            defaultLabel={tt("Default")}
+                            customLabel={tt("Enter my own")}
                           accent={SECTION_COLORS.cash}
                           value={c.rate}
+                          defaultValue={(REGION_DEFAULTS[profile.region] || REGION_DEFAULTS.EU).cashRate}
                           suffix="%/yr"
                           onChange={(v) => updateCashAccount(c.id, { rate: v })}
                         />
@@ -6924,11 +6847,20 @@ is shown in today's terms.`,
                           />
                         </Field>
                       </div>
+                      {profile.multiCurrency && (
+                        <Field label={tt("Currency")}>
+                          <SelectInput
+                            value={ls.currency || currency}
+                            onChange={(v) => updateLumpSum(ls.id, { currency: v })}
+                            options={SUPPORTED_CURRENCIES.map((cc) => ({ value: cc, label: cc }))}
+                          />
+                        </Field>
+                      )}
                       <Field label={tt("Amount")}>
                         <NumberInput
                           accent={color}
                           value={magnitude}
-                          suffix={currency}
+                          suffix={ls.currency || currency}
                           onChange={(v) => updateLumpSum(ls.id, { amount: (type === "pay" ? -1 : 1) * Math.abs(v) })}
                         />
                       </Field>
@@ -7014,16 +6946,27 @@ is shown in today's terms.`,
                         <Field label={inv.type === "house" ? tt("Current market value") : tt("Current value")}>
                           <NumberInput accent={color} value={inv.amount} onChange={(v) => updateInvestment(inv.id, { amount: v })} />
                         </Field>
-                        {inv.type !== "house" && (
-                          <Field label={inv.type === "dividend" ? tt("Price growth rate") : inv.type === "cd" ? tt("Fixed interest rate (today's rate)") : tt("Growth rate")}>
-                            <NumberInput
-                              accent={color}
-                              value={inv.growthRate}
-                              suffix="%/yr"
-                              onChange={(v) => updateInvestment(inv.id, { growthRate: v })}
-                            />
-                          </Field>
-                        )}
+                        <Field
+                          label={
+                            inv.type === "house"
+                              ? tt("Expected appreciation")
+                              : inv.type === "dividend"
+                              ? tt("Price growth rate")
+                              : inv.type === "cd"
+                              ? tt("Fixed interest rate (today's rate)")
+                              : tt("Growth rate")
+                          }
+                        >
+                          <RateInput
+                            defaultLabel={tt("Default")}
+                            customLabel={tt("Enter my own")}
+                            accent={color}
+                            value={inv.growthRate}
+                            defaultValue={defaultGrowthRateForType(REGION_DEFAULTS[inv.region] || REGION_DEFAULTS.EU, inv.type)}
+                            suffix="%/yr"
+                            onChange={(v) => updateInvestment(inv.id, { growthRate: v })}
+                          />
+                        </Field>
                         {(() => {
                           const gr = inv.growthRate;
                           const hi = inv.type === "cd" ? 12 : inv.type === "bond" ? 10 : inv.type === "house" ? 15 : 20;
@@ -7050,9 +6993,12 @@ is shown in today's terms.`,
                         {inv.type === "cd" && (
                           <>
                             <Field label={tt("Long-run rate (once it converges)")}>
-                              <NumberInput
+                              <RateInput
+                            defaultLabel={tt("Default")}
+                            customLabel={tt("Enter my own")}
                                 accent={color}
-                                value={inv.cdLongRunRate ?? Math.max(0, expensesState.inflation - 0.5)}
+                                value={inv.cdLongRunRate ?? (REGION_DEFAULTS[inv.region] || REGION_DEFAULTS.EU).cdRateLongRun}
+                                defaultValue={(REGION_DEFAULTS[inv.region] || REGION_DEFAULTS.EU).cdRateLongRun}
                                 suffix="%/yr"
                                 onChange={(v) => updateInvestment(inv.id, { cdLongRunRate: v })}
                               />
@@ -7073,9 +7019,12 @@ is shown in today's terms.`,
                         )}
                         {inv.type === "dividend" && (
                           <Field label={tt("Dividend yield")}>
-                            <NumberInput
+                            <RateInput
+                            defaultLabel={tt("Default")}
+                            customLabel={tt("Enter my own")}
                               accent={color}
-                              value={inv.dividendYield || 0}
+                              value={inv.dividendYield ?? 3}
+                              defaultValue={3}
                               suffix="%/yr"
                               onChange={(v) => updateInvestment(inv.id, { dividendYield: v })}
                             />
@@ -7280,7 +7229,7 @@ is shown in today's terms.`,
                                       const implied = solveMortgageYears(inv.mortgageBalance || 0, inv.mortgagePayment || 0, inv.mortgageRate || 0);
                                       updateInvestment(inv.id, {
                                         mortgageInputMode: v,
-                                        mortgageYearsLeft: isFinite(implied) ? round2(implied) : inv.mortgageYearsLeft || 10,
+                                        mortgageYearsLeft: isFinite(implied) ? round2(implied) : 20,
                                       });
                                     } else {
                                       updateInvestment(inv.id, { mortgageInputMode: v });
@@ -7295,9 +7244,12 @@ is shown in today's terms.`,
                               {mode === "rate" ? (
                                 <>
                                   <Field label={tt("Interest rate")}>
-                                    <NumberInput
+                                    <RateInput
+                            defaultLabel={tt("Default")}
+                            customLabel={tt("Enter my own")}
                                       accent={color}
                                       value={inv.mortgageRate || 0}
+                                      defaultValue={4.5}
                                       suffix="%/yr"
                                       onChange={(v) => updateInvestment(inv.id, { mortgageRate: v })}
                                     />
@@ -7312,7 +7264,13 @@ is shown in today's terms.`,
                                   <Field label={tt("Years remaining")}>
                                     <NumberInput
                                       accent={color}
-                                      value={inv.mortgageYearsLeft || 0}
+                                      value={
+                                        inv.mortgageYearsLeft ??
+                                        (() => {
+                                          const im = solveMortgageYears(inv.mortgageBalance || 0, inv.mortgagePayment || 0, inv.mortgageRate || 0);
+                                          return isFinite(im) ? Math.round(im * 10) / 10 : 0;
+                                        })()
+                                      }
                                       suffix="yrs"
                                       onChange={(v) => updateMortgage(inv, { mortgageYearsLeft: v })}
                                     />
@@ -7397,9 +7355,12 @@ is shown in today's terms.`,
                                   />
                                 </Field>
                                 <Field label={tt("Agency / selling fee")}>
-                                  <NumberInput
+                                  <RateInput
+                            defaultLabel={tt("Default")}
+                            customLabel={tt("Enter my own")}
                                     accent={color}
                                     value={inv.sellingFeePercent ?? 4}
+                                    defaultValue={4}
                                     suffix="% of sale"
                                     onChange={(v) => updateInvestment(inv.id, { sellingFeePercent: v })}
                                   />
@@ -7452,7 +7413,7 @@ is shown in today's terms.`,
                                       <Field label={tt("Monthly rent after the sale (grows with inflation)")}>
                                         <NumberInput
                                           accent={color}
-                                          value={inv.postSaleRent || 0}
+                                          value={inv.postSaleRent ?? Math.round(expensesState.monthly * 0.35)}
                                           onChange={(v) => updateInvestment(inv.id, { postSaleRent: v })}
                                         />
                                       </Field>
@@ -7650,9 +7611,12 @@ is shown in today's terms.`,
                           <NumberInput accent={color} value={r.amount} onChange={(v) => updateRetirement(r.id, { amount: v })} />
                         </Field>
                         <Field label={tt("Growth rate")}>
-                          <NumberInput
+                          <RateInput
+                            defaultLabel={tt("Default")}
+                            customLabel={tt("Enter my own")}
                             accent={color}
                             value={r.growthRate}
+                            defaultValue={(REGION_DEFAULTS[profile.region] || REGION_DEFAULTS.EU).marketReturn}
                             suffix="%/yr"
                             onChange={(v) => updateRetirement(r.id, { growthRate: v })}
                           />
@@ -7746,6 +7710,16 @@ is shown in today's terms.`,
                   When expenses exceed income, funds are pulled in exactly this order — reorder any individual
                   investment, retirement account, or sellable property. Retirement accounts still respect their
                   own minimum age and early-access rules; a house marked "not sellable" never appears here.
+                </p>
+                <button
+                  onClick={resortWithdrawalOrder}
+                  className="w-full rounded-full py-2.5 text-sm font-semibold mb-3"
+                  style={{ background: `${SECTION_COLORS.order}1A`, color: SECTION_COLORS.order }}
+                >
+                  {tt("Re-sort by size (smallest first)")}
+                </button>
+                <p className="text-xs text-stone-400 mb-3">
+                  {tt("Balances change as your plan runs, so this order can drift. Re-sorting draws down smaller pots first and always leaves your primary home last.")}
                 </p>
                 {withdrawalOrder.map((entry, idx) => {
                   const { type, id } = parseOrderEntry(entry);
@@ -7869,6 +7843,7 @@ is shown in today's terms.`,
             <ResponsiveContainer width="100%" height={340}>
               <ComposedChart
                 data={displayYears}
+                stackOffset="sign"
                 margin={{ top: 5, right: 5, left: 0, bottom: 12 }}
                 onClick={(state) => {
                   if (state && state.activeLabel != null) setSelectedAge(state.activeLabel);
@@ -7924,7 +7899,7 @@ is shown in today's terms.`,
                   type="monotone"
                   dataKey="_total"
                   name={tr("net_worth_label", "Net worth")}
-                  stroke="#1B7A4C"
+                  stroke="#2FD07E"
                   strokeWidth={3}
                   dot={false}
                 />
