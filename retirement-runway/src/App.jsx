@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   AreaChart, Area, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ReferenceLine
+  ResponsiveContainer, ReferenceLine, ReferenceArea
 } from "recharts";
 import {
-  Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, Home, TrendingUp, Wallet, PiggyBank, User, Sparkles, Rocket, Timer, GitCompare, Info, X, Table2
+  Plus, Trash2, ChevronUp, ChevronDown, ChevronLeft, Home, TrendingUp, Wallet, PiggyBank, User, Sparkles, Rocket, Timer, GitCompare, Info, X, Table2, ArrowLeftRight
 } from "lucide-react";
 
 // ---------- helpers ----------
@@ -220,13 +220,40 @@ const PHRASES = {
   },
   "Default": { fr: "Par défaut", it: "Predefinito" },
   "Enter my own": { fr: "Saisir ma valeur", it: "Inserisci il mio valore" },
-  "Re-sort by size (smallest first)": { fr: "Retrier par taille (plus petit d'abord)", it: "Riordina per dimensione (dal più piccolo)" },
-  "Balances change as your plan runs, so this order can drift. Re-sorting draws down smaller pots first and always leaves your primary home last.": {
-    fr: "Les soldes évoluent au fil du plan, donc cet ordre peut se décaler. Le retri puise d'abord dans les plus petits comptes et laisse toujours votre résidence principale en dernier.",
-    it: "I saldi cambiano nel corso del piano, quindi quest'ordine può disallinearsi. Il riordino attinge prima dai conti più piccoli e lascia sempre la tua abitazione principale per ultima.",
+  "Re-sort by rate (lowest first)": { fr: "Retrier par taux (le plus bas d'abord)", it: "Riordina per tasso (dal più basso)" },
+  "Balances change as your plan runs, so this order can drift. Re-sorting draws down your lowest-rate accounts first, so higher-return money keeps growing longer, and always leaves your primary home last.": {
+    fr: "Les soldes évoluent au fil du plan, donc cet ordre peut se décaler. Le retri puise d'abord dans les comptes au taux le plus bas, pour laisser l'argent le plus rentable continuer à croître, et laisse toujours votre résidence principale en dernier.",
+    it: "I saldi cambiano nel corso del piano, quindi quest'ordine può disallinearsi. Il riordino attinge prima dai conti con il tasso più basso, così il denaro più redditizio continua a crescere più a lungo, e lascia sempre la tua abitazione principale per ultima.",
   },
   "show split": { fr: "voir le détail", it: "vedi dettaglio" },
   "then": { fr: "puis", it: "poi" },
+  "Zoomed in": { fr: "Zoom actif", it: "Zoom attivo" },
+  "Age": { fr: "Âge", it: "Età" },
+  "Full range": { fr: "Vue complète", it: "Vista completa" },
+  "Drag across the chart to zoom into a period": {
+    fr: "Faites glisser sur le graphique pour zoomer sur une période",
+    it: "Trascina sul grafico per ingrandire un periodo",
+  },
+  "Sell my primary residence?": { fr: "Vendre ma résidence principale ?", it: "Vendere la mia abitazione principale?" },
+  "Sell my primary residence in this scenario?": {
+    fr: "Vendre ma résidence principale dans ce scénario ?",
+    it: "Vendere la mia abitazione principale in questo scenario?",
+  },
+  "No — never sell it": { fr: "Non — ne jamais la vendre", it: "No — non venderla mai" },
+  "Yes — it's on the table if funds run short": {
+    fr: "Oui — envisageable si les fonds viennent à manquer",
+    it: "Sì — un'opzione se i fondi dovessero scarseggiare",
+  },
+  "This flips whether your primary home can ever be sold in this scenario — it doesn't schedule a sale at a set age, it just changes whether it's available as a last resort if the plan runs short.": {
+    fr: "Ceci change si votre résidence principale peut être vendue dans ce scénario — cela ne planifie pas une vente à un âge donné, cela change seulement si elle est disponible en dernier recours si le plan manque de fonds.",
+    it: "Questo cambia se la tua abitazione principale può essere venduta in questo scenario — non pianifica una vendita a un'età specifica, cambia solo se è disponibile come ultima risorsa se il piano rimane a corto di fondi.",
+  },
+  "Change withdrawal order": { fr: "Modifier l'ordre de retrait", it: "Modifica l'ordine di prelievo" },
+  "A separate withdrawal order just for this scenario — reorder it to test how much it matters.": {
+    fr: "Un ordre de retrait distinct rien que pour ce scénario — réorganisez-le pour voir à quel point cela compte.",
+    it: "Un ordine di prelievo separato solo per questo scenario — riordinalo per vedere quanto conta.",
+  },
+  "Reset to today's order": { fr: "Revenir à l'ordre actuel", it: "Ripristina l'ordine attuale" },
   "income tax on what's left": { fr: "d'impôt sur le revenu sur ce qui reste", it: "di imposta sul reddito su ciò che resta" },
   "social charges": { fr: "de charges sociales", it: "di contributi sociali" },
 };
@@ -2444,9 +2471,12 @@ function runSimulation({ profile, work, expensesState, cash, investments, retire
     const totalMortgageDebt = invBal.reduce((s, inv) => s + (inv.type === "house" ? inv.mortgageBalance || 0 : 0), 0);
     record.Debt = -totalMortgageDebt;
     // per-property mortgage, keyed off the property's display name, so each loan can be
-    // drawn as its own negative band in the Properties drill-down
+    // drawn as its own negative band in the Properties drill-down. Always set (even once
+    // the mortgage hits 0), not just while a balance remains — leaving the key undefined
+    // after payoff broke the area chart's stacking for that year instead of just shrinking
+    // the band to nothing.
     invBal.forEach((inv) => {
-      if (inv.type === "house" && (inv.mortgageBalance || 0) > 0) {
+      if (inv.type === "house") {
         record[`__debt__${inv.displayName}`] = -(inv.mortgageBalance || 0);
       }
     });
@@ -2565,60 +2595,11 @@ const weightedAvgGrowth = (d) => {
   return totalW > 0 ? weightedSum / totalW : 0;
 };
 
-// weighted average of market/dividend investment rates + retirement accounts — excludes
-// cash, CDs, and bonds, which each get their own separate What-If levers
-const weightedAvgMarketRate = (d) => {
-  let totalW = 0;
-  let weightedSum = 0;
-  d.investments
-    .filter((i) => i.type !== "house" && i.type !== "cd" && i.type !== "bond")
-    .forEach((i) => {
-      totalW += i.amount;
-      weightedSum += i.amount * i.growthRate;
-    });
-  d.retirement.forEach((r) => {
-    totalW += r.amount;
-    weightedSum += r.amount * r.growthRate;
-  });
-  return totalW > 0 ? weightedSum / totalW : 0;
-};
-
-// weighted average of bond/fixed-income investment rates — kept separate from equities
-// above since they're a genuinely different risk/return asset class, not just another
-// flavor of "market"
-const weightedAvgBondRate = (d) => {
-  let totalW = 0;
-  let weightedSum = 0;
-  d.investments
-    .filter((i) => i.type === "bond")
-    .forEach((i) => {
-      totalW += i.amount;
-      weightedSum += i.amount * i.growthRate;
-    });
-  return totalW > 0 ? weightedSum / totalW : 0;
-};
-
-// weighted average of each CD's LONG-RUN rate (not today's entry rate)
-const weightedAvgCDLongRun = (d) => {
-  let totalW = 0;
-  let weightedSum = 0;
-  d.investments
-    .filter((i) => i.type === "cd")
-    .forEach((i) => {
-      const lr = i.cdLongRunRate ?? Math.max(0, d.expensesState.inflation - 0.5);
-      totalW += i.amount;
-      weightedSum += i.amount * lr;
-    });
-  return totalW > 0 ? weightedSum / totalW : 0;
-};
-
-// used only to pre-fill a tax lever's starting slider position — a rough proxy for
-// "this year's taxable income" without running a full simulation. Salary alone
-// understates this badly for a retiree (zero salary, but living off withdrawals that
-// the real engine correctly taxes at a real bracket — see the two-pass estimate in
-// the simulation itself) — using at least what they spend annually as a floor gets
-// the displayed starting number much closer to what the engine will actually apply.
-const taxLeverIncomeProxy = (d) => Math.max(d.work.salary || 0, (d.expensesState?.monthly || 0) * 12);
+// NOTE: rate/tax What-If levers (market, bond, CD, cash, and the three tax rates) and
+// the one-time-lump-sum lever were removed to simplify the What-If list — see the
+// weightedAvgMarketRate/weightedAvgBondRate/weightedAvgCDLongRun/taxLeverIncomeProxy
+// helpers and the LEVERS entries they fed in an earlier version of this file if any of
+// them need to come back.
 const LEVERS = [
   {
     id: "spend",
@@ -2642,91 +2623,6 @@ const LEVERS = [
     apply: (d, v) => ({ ...d, work: { ...d.work, yearsWorking: Math.max(0, v) } }),
   },
   {
-    id: "marketRate",
-    label: "Market rate (investments & retirement)",
-    unit: () => "%/yr",
-    getCurrent: weightedAvgMarketRate,
-    apply: (d, v) => {
-      const delta = v - weightedAvgMarketRate(d);
-      return {
-        ...d,
-        investments: d.investments.map((i) =>
-          i.type !== "house" && i.type !== "cd" && i.type !== "bond" ? { ...i, growthRate: i.growthRate + delta } : i
-        ),
-        retirement: d.retirement.map((r) => ({ ...r, growthRate: r.growthRate + delta })),
-      };
-    },
-  },
-  {
-    id: "bondRate",
-    label: "Bond / fixed-income rate",
-    unit: () => "%/yr",
-    getCurrent: weightedAvgBondRate,
-    apply: (d, v) => {
-      const delta = v - weightedAvgBondRate(d);
-      return {
-        ...d,
-        investments: d.investments.map((i) => (i.type === "bond" ? { ...i, growthRate: i.growthRate + delta } : i)),
-      };
-    },
-  },
-  {
-    id: "cdLongRunRate",
-    label: "Long-term CD rate",
-    unit: () => "%/yr",
-    getCurrent: weightedAvgCDLongRun,
-    apply: (d, v) => {
-      const delta = v - weightedAvgCDLongRun(d);
-      return {
-        ...d,
-        investments: d.investments.map((i) =>
-          i.type === "cd"
-            ? { ...i, cdLongRunRate: (i.cdLongRunRate ?? Math.max(0, d.expensesState.inflation - 0.5)) + delta }
-            : i
-        ),
-      };
-    },
-  },
-  {
-    id: "cashRate",
-    label: "Cash interest rate",
-    unit: () => "%/yr",
-    getCurrent: (d) => d.cash.rate,
-    apply: (d, v) => ({ ...d, cash: { ...d.cash, rate: Math.max(0, v) } }),
-  },
-  {
-    id: "taxrate",
-    label: "Average tax rate",
-    unit: () => "%",
-    getCurrent: (d) =>
-      (d.profile.taxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(d.profile))
-        ? d.profile.taxBracket ?? 24
-        : computeOrdinaryTaxRate(resolveTaxCountry(d.profile), taxLeverIncomeProxy(d)),
-    // dragging this lever always pins a manual override for the scenario — that's the point
-    // of a What-If, even if the baseline profile is on "auto"
-    apply: (d, v) => ({ ...d, profile: { ...d.profile, taxMode: "manual", taxBracket: Math.max(0, v) } }),
-  },
-  {
-    id: "dividendTaxRate",
-    label: "Dividend tax rate",
-    unit: () => "%",
-    getCurrent: (d) =>
-      (d.profile.dividendTaxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(d.profile))
-        ? d.profile.dividendTaxRate ?? d.profile.taxBracket ?? 24
-        : computeDividendTaxRate(resolveTaxCountry(d.profile), taxLeverIncomeProxy(d)),
-    apply: (d, v) => ({ ...d, profile: { ...d.profile, dividendTaxMode: "manual", dividendTaxRate: Math.max(0, v) } }),
-  },
-  {
-    id: "capitalGainsTaxRate",
-    label: "Capital gains tax rate",
-    unit: () => "%",
-    getCurrent: (d) =>
-      (d.profile.capitalGainsTaxMode ?? "manual") === "manual" || !isTaxCountrySupported(resolveTaxCountry(d.profile))
-        ? d.profile.capitalGainsTaxRate ?? d.profile.taxBracket ?? 24
-        : computeCapitalGainsTaxRate(resolveTaxCountry(d.profile), taxLeverIncomeProxy(d)),
-    apply: (d, v) => ({ ...d, profile: { ...d.profile, capitalGainsTaxMode: "manual", capitalGainsTaxRate: Math.max(0, v) } }),
-  },
-  {
     id: "inflation",
     label: "Inflation",
     unit: () => "%/yr",
@@ -2747,9 +2643,10 @@ const LEVERS = [
     getCurrent: () => 0,
     apply: (d, v) => ({ ...d, expensesState: { ...d.expensesState, monthly: Math.max(0, d.expensesState.monthly - (v || 0)) } }),
   },
-  { id: "lumpsum", label: "One-time lump sum", special: "lumpsum" },
   { id: "buyhouse", label: "Buy a new investment property", special: "buyhouse" },
   { id: "spendingDecline", label: "Spending declines with age", special: "spendingDecline" },
+  { id: "sellPrimaryHome", label: "Sell my primary residence?", special: "sellPrimaryHome" },
+  { id: "reorderWithdrawal", label: "Change withdrawal order", special: "reorderWithdrawal" },
 ];
 
 // ---------- reusable UI bits ----------
@@ -3420,6 +3317,18 @@ export default function RetirementCalculator() {
   // account broken out, the original view). Defaults to the simplest one.
   const [chartViewMode, setChartViewMode] = useState("total");
   const [chartDrilldown, setChartDrilldown] = useState(null); // null = show all four groups
+  // Forecast chart pinch/drag zoom: { left, right } ages currently zoomed into, or null
+  // for the full range. refAreaLeft/Right track an in-progress drag selection before it's
+  // committed into chartZoom on release.
+  const [chartZoom, setChartZoom] = useState(null);
+  const [refAreaLeft, setRefAreaLeft] = useState(null);
+  const [refAreaRight, setRefAreaRight] = useState(null);
+  const justZoomedRef = useRef(false); // suppresses the tap-to-inspect-year side effect right after a drag-zoom
+  // in breakdown mode the category bands already sum visually to the total, so the net
+  // worth line drawn on top of them just flattens/obscures the split — off by default
+  // there, but still toggleable from the legend. Always on in total mode, where it IS
+  // the point.
+  const [breakdownNetWorthVisible, setBreakdownNetWorthVisible] = useState(false);
   const [showWhatIfIntro, setShowWhatIfIntro] = useState(false); // What-If tab: explanation collapsed behind an (i)
   const [fxRates, setFxRates] = useState(FX_FALLBACK);
   const [fxSource, setFxSource] = useState("fallback"); // "live" | "fallback" | "loading"
@@ -3599,6 +3508,55 @@ export default function RetirementCalculator() {
       }
       return 0;
     };
+    // A mortgaged rental is a leveraged investment even when its stated appreciation rate
+    // looks low, as long as it's self-funding: the rent pays down the mortgage for you,
+    // building equity your own cash never touched. This isolates that "free" slice —
+    // of this year's mortgage payment, how much does the rent actually cover (capped at
+    // the payment itself — surplus rent beyond that is ordinary income, not a property
+    // return), and of THAT, what share goes to principal rather than interest (interest
+    // is a pure cost, it builds nothing). That euro amount, as a fraction of the equity
+    // you currently have tied up in the property, is the extra return leverage is quietly
+    // handing you — on top of the plain appreciation rate every other account also has.
+    const houseEffectiveRate = (h) => {
+      const appreciation = typeof h.growthRate === "number" ? h.growthRate : 0;
+      const V = h.amount || 0;
+      const M = h.mortgageBalance || 0;
+      const equityNow = V - M;
+      const annualPayment = (h.mortgagePayment || 0) * 12;
+      // no mortgage, underwater, not a rental, or no payment to fund — nothing to amplify,
+      // just use the plain appreciation rate like any other account
+      if (M <= 0.01 || equityNow <= 0.01 || h.usage !== "rental" || annualPayment <= 0) return appreciation;
+      const rate = h.mortgageRateType === "floating" ? convertedCash.rate : h.mortgageRate || 0;
+      const annualInterest = M * (rate / 100);
+      const principalPaid = Math.max(0, Math.min(annualPayment - annualInterest, M));
+      const principalFraction = principalPaid / annualPayment; // share of every payment euro that builds equity, not interest
+      const annualRent = (h.rent || 0) * 12;
+      const rentCovered = Math.min(annualRent, annualPayment); // rent only "counts" up to what the payment needs
+      const rentFundedPrincipal = rentCovered * principalFraction; // equity gained this year that your own cash didn't pay for
+      const leverageBonus = (rentFundedPrincipal / equityNow) * 100;
+      return appreciation + leverageBonus;
+    };
+    // the account's growth/interest rate — the actual withdrawal priority key. Draining
+    // the lowest-rate account first (regardless of its balance) leaves higher-rate money
+    // compounding for longer. `growthRate` is the unified field for this across every
+    // investment type, houses included (their appreciation rate) — except a mortgaged
+    // rental, which uses the leverage-adjusted effective rate above instead.
+    const rateOf = (entry) => {
+      const { type, id } = parseOrderEntry(entry);
+      if (type === "investment") {
+        const inv = invList.find((i) => i.id === id);
+        return inv && typeof inv.growthRate === "number" ? inv.growthRate : Infinity;
+      }
+      if (type === "house") {
+        const h = invList.find((i) => i.id === id);
+        return h ? houseEffectiveRate(h) : Infinity;
+      }
+      if (type === "retirement") {
+        const r = retList.find((x) => x.id === id);
+        return r && typeof r.growthRate === "number" ? r.growthRate : Infinity;
+      }
+      return -Infinity; // cash has no rate here — it's already pulled out and always sorted first
+    };
     const isPrimaryHome = (entry) => {
       const { type, id } = parseOrderEntry(entry);
       if (type !== "house") return false;
@@ -3624,7 +3582,9 @@ export default function RetirementCalculator() {
         .sort((x, y) => {
           const tx = tier(x), ty = tier(y);
           if (tx !== ty) return tx - ty;
-          return valueOf(x) - valueOf(y); // then smallest first within a tier
+          const rx = rateOf(x), ry = rateOf(y);
+          if (rx !== ry) return rx - ry; // then lowest growth/interest rate first within a tier
+          return valueOf(x) - valueOf(y); // tie-break: smallest balance first
         }),
     ];
   };
@@ -3992,13 +3952,20 @@ export default function RetirementCalculator() {
     }
 
     // 3) returns 1 point higher per year — informational, not something anyone can just
-    // decide, but useful context for how sensitive the plan is to market performance
-    const marketLever = LEVERS.find((l) => l.id === "marketRate");
-    if (marketLever) {
-      const currentAvg = marketLever.getCurrent(base);
-      const dDays = deltaDaysFor(marketLever.apply(base, currentAvg + 1));
-      if (dDays != null) scenarios.push({ type: "returns", deltaDays: dDays });
-    }
+    // decide, but useful context for how sensitive the plan is to market performance.
+    // This used to go through a "market rate" What-If lever; that lever was removed to
+    // simplify the What-If list, so the +1pt bump is applied directly here instead —
+    // same market/dividend investments + retirement accounts, same exclusion of houses,
+    // CDs and bonds (each their own asset class, not part of "the market").
+    const bumpedForReturns = {
+      ...base,
+      investments: base.investments.map((i) =>
+        i.type !== "house" && i.type !== "cd" && i.type !== "bond" ? { ...i, growthRate: i.growthRate + 1 } : i
+      ),
+      retirement: base.retirement.map((r) => ({ ...r, growthRate: r.growthRate + 1 })),
+    };
+    const returnsDDays = deltaDaysFor(bumpedForReturns);
+    if (returnsDDays != null) scenarios.push({ type: "returns", deltaDays: returnsDDays });
 
     const positive = scenarios.filter((s) => s.deltaDays > 0).sort((a, b) => b.deltaDays - a.deltaDays);
     return positive[0] || null;
@@ -4019,17 +3986,6 @@ export default function RetirementCalculator() {
       savingsRule: effectiveSavingsRule,
     };
     whatIfChanges.forEach((change) => {
-      if (change.leverId === "lumpsum") {
-        const signedAmount = (change.amountType === "pay" ? -1 : 1) * Math.abs(change.amountMagnitude || 0);
-        draft = {
-          ...draft,
-          lumpSums: [
-            ...draft.lumpSums,
-            { id: `whatif-${change.id}`, name: change.name || "Lump sum", age: change.age ?? profile.currentAge, amount: signedAmount },
-          ],
-        };
-        return;
-      }
       if (change.leverId === "buyhouse") {
         const value = change.value || 0;
         const deposit = Math.min(change.deposit || 0, value);
@@ -4079,6 +4035,39 @@ export default function RetirementCalculator() {
         draft = { ...draft, expensesState: { ...draft.expensesState, spendingDecline: { enabled: !!change.enabled } } };
         return;
       }
+      if (change.leverId === "sellPrimaryHome") {
+        const primary = draft.investments.find((i) => i.type === "house" && i.usage !== "rental");
+        if (primary) {
+          const wantSell = !!change.sell;
+          const key = `house:${primary.id}`;
+          draft = {
+            ...draft,
+            investments: draft.investments.map((i) => (i.id === primary.id ? { ...i, sellable: wantSell } : i)),
+            withdrawalOrder: wantSell
+              ? draft.withdrawalOrder.includes(key)
+                ? draft.withdrawalOrder
+                : [...draft.withdrawalOrder, key] // newly sellable — add it at the end, same "primary home always last" spot the real order keeps it in
+              : draft.withdrawalOrder.filter((e) => e !== key),
+          };
+        }
+        return;
+      }
+      if (change.leverId === "reorderWithdrawal") {
+        // reconcile the stored custom order against THIS draft's actual accounts — the
+        // same drop-orphans-append-missing rule the real withdrawal order keeps itself in
+        // sync with, so a since-removed account or a house another what-if change just
+        // added doesn't silently break the simulation
+        const validKeys = new Set(["cash"]);
+        draft.investments.forEach((i) => {
+          if (i.type !== "house" || i.sellable !== false) validKeys.add(i.type === "house" ? `house:${i.id}` : `investment:${i.id}`);
+        });
+        draft.retirement.forEach((r) => validKeys.add(`retirement:${r.id}`));
+        const cleaned = (change.order || []).filter((e) => validKeys.has(e));
+        const present = new Set(cleaned);
+        const missing = [...validKeys].filter((k) => !present.has(k));
+        draft = { ...draft, withdrawalOrder: [...cleaned, ...missing] };
+        return;
+      }
       const lever = LEVERS.find((l) => l.id === change.leverId);
       if (lever) draft = lever.apply(draft, change.value ?? lever.getCurrent(draft));
     });
@@ -4105,14 +4094,6 @@ export default function RetirementCalculator() {
     lumpSums,
     savingsRule: effectiveSavingsRule,
   };
-  const newLumpSumRow = (id) => ({
-    id,
-    leverId: "lumpsum",
-    name: "Lump sum",
-    age: profile.currentAge + 5,
-    amountType: "receive",
-    amountMagnitude: 10000,
-  });
   const newBuyHouseRow = (id) => ({
     id,
     leverId: "buyhouse",
@@ -4129,15 +4110,26 @@ export default function RetirementCalculator() {
     leverId: "spendingDecline",
     enabled: !expensesState.spendingDecline?.enabled,
   });
+  // defaults to the OPPOSITE of whatever the main profile currently has it set to — the
+  // whole point of this lever is "what if the other thing happened instead"
+  const newSellPrimaryHomeRow = (id) => {
+    const primary = investments.find((i) => i.type === "house" && i.usage !== "rental");
+    const baselineSellable = primary ? primary.sellable !== false : false;
+    return { id, leverId: "sellPrimaryHome", sell: !baselineSellable };
+  };
+  const newReorderWithdrawalRow = (id) => ({ id, leverId: "reorderWithdrawal", order: [...withdrawalOrder] });
   const addWhatIfChange = () => {
     const used = whatIfChanges.map((c) => c.leverId);
-    const next = LEVERS.find((l) => !used.includes(l.id)) || LEVERS[0];
-    if (next.special === "lumpsum") {
-      setWhatIfChanges((prev) => [...prev, newLumpSumRow(uid())]);
-    } else if (next.special === "buyhouse") {
+    const hasPrimaryHome = investments.some((i) => i.type === "house" && i.usage !== "rental");
+    const next = LEVERS.find((l) => !used.includes(l.id) && (l.id !== "sellPrimaryHome" || hasPrimaryHome)) || LEVERS[0];
+    if (next.special === "buyhouse") {
       setWhatIfChanges((prev) => [...prev, newBuyHouseRow(uid())]);
     } else if (next.special === "spendingDecline") {
       setWhatIfChanges((prev) => [...prev, newSpendingDeclineRow(uid())]);
+    } else if (next.special === "sellPrimaryHome") {
+      setWhatIfChanges((prev) => [...prev, newSellPrimaryHomeRow(uid())]);
+    } else if (next.special === "reorderWithdrawal") {
+      setWhatIfChanges((prev) => [...prev, newReorderWithdrawalRow(uid())]);
     } else {
       setWhatIfChanges((prev) => [...prev, { id: uid(), leverId: next.id, value: round2(next.getCurrent(baselineDraft)) }]);
     }
@@ -4149,14 +4141,22 @@ export default function RetirementCalculator() {
         if (c.id !== id) return c;
         if (patch.leverId) {
           const lever = LEVERS.find((l) => l.id === patch.leverId);
-          if (lever && lever.special === "lumpsum") return newLumpSumRow(c.id);
           if (lever && lever.special === "buyhouse") return newBuyHouseRow(c.id);
           if (lever && lever.special === "spendingDecline") return newSpendingDeclineRow(c.id);
+          if (lever && lever.special === "sellPrimaryHome") return newSellPrimaryHomeRow(c.id);
+          if (lever && lever.special === "reorderWithdrawal") return newReorderWithdrawalRow(c.id);
           if (lever) return { id: c.id, leverId: lever.id, value: round2(lever.getCurrent(baselineDraft)) };
         }
         return { ...c, ...patch };
       })
     );
+  const moveWhatIfOrder = (changeId, order, idx, dir) => {
+    const target = idx + dir;
+    if (target < 0 || target >= order.length) return;
+    const next = [...order];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    updateWhatIfChange(changeId, { order: next });
+  };
 
   const investedWealth =
     convertedCash.amount +
@@ -4253,17 +4253,46 @@ export default function RetirementCalculator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartViewMode, chartDrilldown, drilldownMembers, years, hasMortgageDebt, language]);
 
+  // ticks are derived from whatever range the chart is actually showing — the full plan,
+  // or a zoomed-in sub-range — so a drag-zoom into a couple of years gets fine-grained,
+  // readable ticks instead of the sparse ones sized for the whole 40-60 year plan
   const xTicks = useMemo(() => {
-    if (!years.length) return [];
-    const first = years[0].age;
-    const last = years[years.length - 1].age;
+    const range = chartZoom
+      ? years.filter((y) => y.age >= chartZoom.left && y.age <= chartZoom.right)
+      : years;
+    if (!range.length) return [];
+    const first = range[0].age;
+    const last = range[range.length - 1].age;
     const span = last - first;
     const step = span <= 10 ? 1 : Math.ceil(span / 8 / 5) * 5;
     const ticks = [];
     for (let a = first; a < last; a += step) ticks.push(a);
     ticks.push(last);
     return ticks;
-  }, [years]);
+  }, [years, chartZoom]);
+
+  // Forecast chart drag-to-zoom: press (mouse or a finger) on an age, drag to another,
+  // release to zoom into that span. Recharts feeds the same `activeLabel` (the age under
+  // the pointer) to both mouse and touch handlers, so one set of handlers covers both —
+  // wired to onMouseDown/Move/Up AND onTouchStart/Move/End below.
+  const chartDragStart = (e) => {
+    if (e && e.activeLabel != null) {
+      setRefAreaLeft(e.activeLabel);
+      setRefAreaRight(null);
+    }
+  };
+  const chartDragMove = (e) => {
+    if (refAreaLeft != null && e && e.activeLabel != null) setRefAreaRight(e.activeLabel);
+  };
+  const chartDragEnd = () => {
+    if (refAreaLeft != null && refAreaRight != null && refAreaLeft !== refAreaRight) {
+      justZoomedRef.current = true;
+      setChartZoom({ left: Math.min(refAreaLeft, refAreaRight), right: Math.max(refAreaLeft, refAreaRight) });
+    }
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+  };
+  const resetChartZoom = () => setChartZoom(null);
 
   // position of the "you could stop working" marker along the runway bar, as a %
   const fiPct =
@@ -4334,6 +4363,22 @@ export default function RetirementCalculator() {
     () => years.map((y) => deflateRecord(y, realFactorForAge(y.age, profile.currentAge, expensesState.inflation, realTermsView))),
     [years, profile.currentAge, expensesState.inflation, realTermsView]
   );
+  // the slice actually fed to the chart once someone's drag-zoomed into a sub-range —
+  // ages are unique and already sorted, so a plain age-bounds filter is enough
+  const zoomedDisplayYears = useMemo(
+    () => (chartZoom ? displayYears.filter((y) => y.age >= chartZoom.left && y.age <= chartZoom.right) : displayYears),
+    [displayYears, chartZoom]
+  );
+  // if the plan's own age range changes (a profile edit, a what-if, a fresh simulation)
+  // and the current zoom window no longer makes sense against it, drop back to full view
+  // rather than risk showing an empty or mismatched chart
+  useEffect(() => {
+    if (!chartZoom || !years.length) return;
+    const first = years[0].age;
+    const last = years[years.length - 1].age;
+    if (chartZoom.left < first || chartZoom.right > last || chartZoom.left >= chartZoom.right) setChartZoom(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [years]);
   const displaySelectedRecord = selectedRecord
     ? deflateRecord(selectedRecord, realFactorForAge(selectedRecord.age, profile.currentAge, expensesState.inflation, realTermsView))
     : null;
@@ -4383,8 +4428,8 @@ export default function RetirementCalculator() {
       const present = new Set(cleaned);
       const missing = [...validKeys].filter((k) => !present.has(k));
       if (cleaned.length === prev.length && missing.length === 0) return prev; // no change
-      // a newly-added account slots in by size rather than always landing last, so the
-      // list stays consistent with the smallest-first rule the order was built on
+      // a newly-added account slots in by rate rather than always landing last, so the
+      // list stays consistent with the lowest-rate-first rule the order was built on
       return sortOrderBySize([...cleaned, ...missing], investments, retirement);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4590,6 +4635,17 @@ export default function RetirementCalculator() {
           <div className="text-xs text-stone-400 mt-2">
             {trQuestionProgress(language, wizardStepIndex + 1, steps.length)}
           </div>
+          {wizardStepIndex > 0 && (
+            <div className="flex justify-center mt-3">
+              <button
+                onClick={goBack}
+                className="flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-semibold"
+                style={{ background: "#EEE9F7", color: "#4C4370" }}
+              >
+                <ChevronLeft size={17} /> {tr("wizard_back_label", "Back")}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 pt-6 pb-4">
@@ -5503,18 +5559,6 @@ export default function RetirementCalculator() {
             </>
           )}
         </div>
-
-        {wizardStepIndex > 0 && (
-          <div className="px-6 pb-6 pt-1">
-            <button
-              onClick={goBack}
-              className="flex items-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-semibold"
-              style={{ background: "#EEE9F7", color: "#4C4370" }}
-            >
-              <ChevronLeft size={17} /> {tr("wizard_back_label", "Back")}
-            </button>
-          </div>
-        )}
       </div>
     );
   }
@@ -7716,10 +7760,10 @@ export default function RetirementCalculator() {
                   className="w-full rounded-full py-2.5 text-sm font-semibold mb-3"
                   style={{ background: `${SECTION_COLORS.order}1A`, color: SECTION_COLORS.order }}
                 >
-                  {tt("Re-sort by size (smallest first)")}
+                  {tt("Re-sort by rate (lowest first)")}
                 </button>
                 <p className="text-xs text-stone-400 mb-3">
-                  {tt("Balances change as your plan runs, so this order can drift. Re-sorting draws down smaller pots first and always leaves your primary home last.")}
+                  {tt("Balances change as your plan runs, so this order can drift. Re-sorting draws down your lowest-rate accounts first, so higher-return money keeps growing longer, and always leaves your primary home last.")}
                 </p>
                 {withdrawalOrder.map((entry, idx) => {
                   const { type, id } = parseOrderEntry(entry);
@@ -7840,16 +7884,43 @@ export default function RetirementCalculator() {
                 />
               </div>
             )}
-            <ResponsiveContainer width="100%" height={340}>
-              <ComposedChart
-                data={displayYears}
-                stackOffset="sign"
-                margin={{ top: 5, right: 5, left: 0, bottom: 12 }}
-                onClick={(state) => {
-                  if (state && state.activeLabel != null) setSelectedAge(state.activeLabel);
-                }}
-                style={{ cursor: "pointer" }}
-              >
+            {chartZoom ? (
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className="text-[11px] font-semibold" style={{ color: "#4C8DFF" }}>
+                  {tt("Zoomed in")}: {tt("Age")} {chartZoom.left}–{chartZoom.right}
+                </span>
+                <button
+                  onClick={resetChartZoom}
+                  className="flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold"
+                  style={{ background: "#EEE9F7", color: "#4C4370" }}
+                >
+                  <ArrowLeftRight size={13} /> {tt("Full range")}
+                </button>
+              </div>
+            ) : (
+              <p className="text-[11px] text-stone-400 mb-2">{tt("Drag across the chart to zoom into a period")}</p>
+            )}
+            <div style={{ touchAction: refAreaLeft != null ? "none" : "pan-y" }}>
+              <ResponsiveContainer width="100%" height={340}>
+                <ComposedChart
+                  data={zoomedDisplayYears}
+                  stackOffset="sign"
+                  margin={{ top: 5, right: 5, left: 0, bottom: 12 }}
+                  onClick={(state) => {
+                    if (justZoomedRef.current) {
+                      justZoomedRef.current = false;
+                      return;
+                    }
+                    if (state && state.activeLabel != null) setSelectedAge(state.activeLabel);
+                  }}
+                  onMouseDown={chartDragStart}
+                  onMouseMove={chartDragMove}
+                  onMouseUp={chartDragEnd}
+                  onTouchStart={chartDragStart}
+                  onTouchMove={chartDragMove}
+                  onTouchEnd={chartDragEnd}
+                  style={{ cursor: "pointer" }}
+                >
                 <defs>
                   {chartStackedSeries.map((s) => (
                     <linearGradient key={s.key} id={gradId(s.key)} x1="0" y1="0" x2="0" y2="1">
@@ -7868,22 +7939,39 @@ export default function RetirementCalculator() {
                 />
                 <YAxis tickFormatter={fmtShort} tick={{ fontSize: 11, fill: "#8A81A6" }} width={45} />
                 <Tooltip content={(props) => <StackedChartTooltip {...props} currency={currency} netWorthLabel={tr("net_worth_label", "Net worth")} />} />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 14 }} />
+                <Legend
+                  wrapperStyle={{ fontSize: 11, paddingTop: 14, cursor: "pointer" }}
+                  onClick={(e) => {
+                    if (e && e.dataKey === "_total") setBreakdownNetWorthVisible((v) => !v);
+                  }}
+                />
                 <ReferenceLine y={0} stroke="#C9C2E0" strokeWidth={1} />
 
-                {/* breakdown mode: the stacked category (or drilled-in account) bands */}
-                {chartStackedSeries.map((s) => (
-                  <Area
-                    key={s.key}
-                    type="monotone"
-                    dataKey={s.key}
-                    name={s.name}
-                    stackId="1"
-                    stroke={s.color}
-                    strokeWidth={1.5}
-                    fill={`url(#${gradId(s.key)})`}
-                  />
-                ))}
+                {/* breakdown mode: the stacked category (or drilled-in account) bands.
+                    Debt bands get their OWN stackId, separate from the positive asset
+                    bands: with stackOffset="sign", a series is bucketed into the positive
+                    or negative accumulator per-point based on its own sign, and once a
+                    mortgage hits exactly 0 that point reads as non-negative — so if it
+                    shared a stack with the positive bands, its baseline would jump to the
+                    top of the asset stack (the total) instead of sitting at the zero axis,
+                    drawing a vertical spike right where the debt should just disappear.
+                    Keeping debt in its own stack means a lone series always baselines at
+                    0 regardless of sign, so a paid-off mortgage correctly shrinks to nothing. */}
+                {chartStackedSeries.map((s) => {
+                  const isDebtBand = s.key === "Debt" || s.key.startsWith("__debt__");
+                  return (
+                    <Area
+                      key={s.key}
+                      type="monotone"
+                      dataKey={s.key}
+                      name={s.name}
+                      stackId={isDebtBand ? "debt" : "1"}
+                      stroke={s.color}
+                      strokeWidth={1.5}
+                      fill={`url(#${gradId(s.key)})`}
+                    />
+                  );
+                })}
 
                 {/* total mode: assets and debt as context lines around the net-worth line */}
                 {chartViewMode === "total" && (
@@ -7893,15 +7981,24 @@ export default function RetirementCalculator() {
                   <Line type="monotone" dataKey="Debt" name={tt("Debt (mortgage)")} stroke="#FF6B5B" strokeWidth={1.5} dot={false} />
                 )}
 
-                {/* net worth is ALWAYS drawn, in both modes — thicker and green so it
-                    reads as the headline number rather than one series among many */}
+                {/* net worth line — thicker and its own light blue so it reads as the
+                    headline number rather than one series among many. Was the same green
+                    family as the Cash band (#2FD07E vs #3DDC97), hard to tell apart at a
+                    glance — this blue isn't used by any other series (Investments/Assets
+                    is the darker #4C8DFF). Always shown in "total" mode, where it's the
+                    whole point; off by default in "breakdown" mode, where it just
+                    flattens/obscures the category split it's drawn on top of — but still
+                    toggleable from the legend (the `hide` prop is what greys a legend
+                    entry out and strikes it through, and what the Legend onClick below
+                    flips on click). */}
                 <Line
                   type="monotone"
                   dataKey="_total"
                   name={tr("net_worth_label", "Net worth")}
-                  stroke="#2FD07E"
+                  stroke="#38BDF8"
                   strokeWidth={3}
                   dot={false}
+                  hide={chartViewMode === "breakdown" && !breakdownNetWorthVisible}
                 />
 
                 {ranOutAge && (
@@ -7913,8 +8010,12 @@ export default function RetirementCalculator() {
                   />
                 )}
                 {selectedAge != null && <ReferenceLine x={selectedAge} stroke="#4C8DFF" strokeWidth={2} />}
-              </ComposedChart>
-            </ResponsiveContainer>
+                {refAreaLeft != null && refAreaRight != null && (
+                  <ReferenceArea x1={refAreaLeft} x2={refAreaRight} stroke="#4C8DFF" strokeOpacity={0.4} fill="#4C8DFF" fillOpacity={0.15} />
+                )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {selectedRecord && (selectedRecord._defaulted || selectedRecord._shortfall) && (
@@ -8120,52 +8221,12 @@ export default function RetirementCalculator() {
                   <SelectInput
                     value={change.leverId}
                     onChange={(v) => updateWhatIfChange(change.id, { leverId: v })}
-                    options={LEVERS.map((l) => ({ value: l.id, label: tt(l.label) }))}
+                    options={LEVERS.filter(
+                      (l) => l.id !== "sellPrimaryHome" || investments.some((i) => i.type === "house" && i.usage !== "rental")
+                    ).map((l) => ({ value: l.id, label: tt(l.label) }))}
                   />
                 </Field>
-                {change.leverId === "lumpsum" ? (
-                  <>
-                    <Field label={tt("Name")}>
-                      <TextInput value={change.name || ""} onChange={(v) => updateWhatIfChange(change.id, { name: v })} />
-                    </Field>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label={tt("At age")}>
-                        <NumberInput
-                          accent="#7C5CFC"
-                          value={change.age ?? profile.currentAge}
-                          onChange={(v) => updateWhatIfChange(change.id, { age: v })}
-                        />
-                      </Field>
-                      <Field label={tt("Type")}>
-                        <SelectInput
-                          value={change.amountType || "receive"}
-                          onChange={(v) => updateWhatIfChange(change.id, { amountType: v })}
-                          options={[
-                            { value: "receive", label: tt("Receive") },
-                            { value: "pay", label: tt("Pay") },
-                          ]}
-                        />
-                      </Field>
-                    </div>
-                    <Field label={tt("Amount")}>
-                      <NumberInput
-                        accent="#7C5CFC"
-                        value={change.amountMagnitude ?? 0}
-                        suffix={currency}
-                        onChange={(v) => updateWhatIfChange(change.id, { amountMagnitude: Math.abs(v) })}
-                      />
-                    </Field>
-                    {(Math.round(change.age ?? profile.currentAge) < profile.currentAge ||
-                      Math.round(change.age ?? profile.currentAge) > profile.lifeExpectancy) && (
-                      <div className="rounded-lg px-2.5 py-2 text-[11px] font-medium" style={{ background: "#FFF1EC", color: "#B23A22" }}>
-                        ⚠️{" "}
-                        {tr("whatif_lump_out_of_range")
-                          .replace("{min}", profile.currentAge)
-                          .replace("{max}", profile.lifeExpectancy)}
-                      </div>
-                    )}
-                  </>
-                ) : change.leverId === "buyhouse" ? (
+                {change.leverId === "buyhouse" ? (
                   <>
                     <Field label={tt("Name")}>
                       <TextInput value={change.name || ""} onChange={(v) => updateWhatIfChange(change.id, { name: v })} />
@@ -8225,9 +8286,86 @@ export default function RetirementCalculator() {
                     </Field>
                     <p className="text-xs text-stone-400 leading-relaxed">{tr("whatif_spending_decline_note")}</p>
                   </>
+                ) : change.leverId === "sellPrimaryHome" ? (
+                  <>
+                    <Field label={tt("Sell my primary residence in this scenario?")}>
+                      <SelectInput
+                        value={change.sell ? "yes" : "no"}
+                        onChange={(v) => updateWhatIfChange(change.id, { sell: v === "yes" })}
+                        options={[
+                          { value: "no", label: tt("No — never sell it") },
+                          { value: "yes", label: tt("Yes — it's on the table if funds run short") },
+                        ]}
+                      />
+                    </Field>
+                    <p className="text-xs text-stone-400 leading-relaxed">
+                      {tt(
+                        "This flips whether your primary home can ever be sold in this scenario — it doesn't schedule a sale at a set age, it just changes whether it's available as a last resort if the plan runs short."
+                      )}
+                    </p>
+                  </>
+                ) : change.leverId === "reorderWithdrawal" ? (
+                  <>
+                    <p className="text-xs text-stone-400 mb-3 leading-relaxed">
+                      {tt("A separate withdrawal order just for this scenario — reorder it to test how much it matters.")}
+                    </p>
+                    <button
+                      onClick={() => updateWhatIfChange(change.id, { order: [...withdrawalOrder] })}
+                      className="w-full rounded-full py-2 text-xs font-semibold mb-3"
+                      style={{ background: "#7C5CFC1A", color: "#4B2E9E" }}
+                    >
+                      {tt("Reset to today's order")}
+                    </button>
+                    {(change.order || []).map((entry, idx) => {
+                      const { type, id } = parseOrderEntry(entry);
+                      let label = "Cash";
+                      let color = SECTION_COLORS.cash;
+                      if (type === "investment") {
+                        const inv = investments.find((i) => i.id === id);
+                        label = inv ? inv.name || "Investment" : "(removed investment)";
+                        color = inv ? invColor(id) : "#C7C2D9";
+                      } else if (type === "retirement") {
+                        const r = retirement.find((x) => x.id === id);
+                        label = r ? r.name || "Retirement account" : "(removed account)";
+                        color = r ? retColor(id) : "#C7C2D9";
+                      } else if (type === "house") {
+                        const inv = investments.find((i) => i.id === id);
+                        label = inv ? `${inv.name || "Property"} (sell)` : "(removed property)";
+                        color = inv ? invColor(id) : "#C7C2D9";
+                      }
+                      const order = change.order || [];
+                      return (
+                        <div
+                          key={entry}
+                          className="flex items-center justify-between rounded-xl bg-white px-3.5 py-2.5 mb-2 shadow-sm"
+                          style={{ borderLeft: `4px solid ${color}` }}
+                        >
+                          <span className="text-sm font-medium flex items-center gap-2">
+                            <span className="text-stone-400 text-xs">{idx + 1}.</span> {label}
+                          </span>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => moveWhatIfOrder(change.id, order, idx, -1)}
+                              className="text-stone-300 hover:text-[#FF5C93] disabled:opacity-30"
+                              disabled={idx === 0}
+                            >
+                              <ChevronUp size={16} />
+                            </button>
+                            <button
+                              onClick={() => moveWhatIfOrder(change.id, order, idx, 1)}
+                              className="text-stone-300 hover:text-[#FF5C93] disabled:opacity-30"
+                              disabled={idx === order.length - 1}
+                            >
+                              <ChevronDown size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
                 ) : (
                   <>
-                    <Field label={tt(lever.id === "marketRate" || lever.id === "cdLongRunRate" ? "New weighted-average rate" : "New value (starts as your current setting)")}>
+                    <Field label={tt("New value (starts as your current setting)")}>
                       <NumberInput
                         accent="#7C5CFC"
                         value={change.value}
@@ -8235,21 +8373,6 @@ export default function RetirementCalculator() {
                         onChange={(v) => updateWhatIfChange(change.id, { value: v })}
                       />
                     </Field>
-                    {lever.id === "marketRate" && (
-                      <p className="text-[11px] text-stone-400 leading-relaxed mb-2">
-                        {tr("whatif_market_rate_note").replace("{rate}", round2(weightedAvgMarketRate(baselineDraft)))}
-                      </p>
-                    )}
-                    {lever.id === "bondRate" && (
-                      <p className="text-[11px] text-stone-400 leading-relaxed mb-2">
-                        {tr("whatif_bond_rate_note").replace("{rate}", round2(weightedAvgBondRate(baselineDraft)))}
-                      </p>
-                    )}
-                    {lever.id === "cdLongRunRate" && (
-                      <p className="text-[11px] text-stone-400 leading-relaxed mb-2">
-                        {tr("whatif_cd_rate_note").replace("{rate}", round2(weightedAvgCDLongRun(baselineDraft)))}
-                      </p>
-                    )}
                   </>
                 )}
               </div>
